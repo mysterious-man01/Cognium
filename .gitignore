@@ -1,0 +1,7 @@
+.venv/
+.flutter/
+__pycache__/
+DATA/
+
+.src
+.env

@@ -1,0 +1,13 @@
+- [ ] Add markdown renderer
+- [ ] Add generation stats
+- [ ] Add multimodal capabilities
+- [ ] Add file upload
+- [ ] Add Long-Term Memory
+- [ ] Add agentic apabilities
+- [ ] Add RAG capabilities
+- [ ] Add tools (web serch, etc)
+- [ ] Integrate Stable-Diffusion.cpp
+- [ ] Add other providers (ONNX, Transformers, etc)
+- [ ] Add text-2-speech (Supertonic, Kitten, Kokoro, etc)
+- [ ] Add speech-2-text interaction
+- [ ] Add MCP server integration
