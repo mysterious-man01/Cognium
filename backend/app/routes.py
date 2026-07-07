@@ -227,13 +227,12 @@ async def get_cfg():
     }
 
     cfg_path = ''
-    print(f'PATH[0] -> "{PATH[0]}" and PATH[0] is None? -> "{PATH[0] is None}"')
     if PATH[0]:
         cfg_path = f'{PATH[0]}/Config'
     else:
         cfg_path = f'{PATH[1]}/Config'
 
-    print(f'cfg_path -> {cfg_path}')
+    print(f'cfg_path used -> {cfg_path}')
 
     if os.path.exists(cfg_path):
         with open(f'{cfg_path}/config.json', 'r', encoding='UTF-8') as file:
@@ -283,7 +282,6 @@ async def create_chat():
 
 @app.patch("/chat/{chat_id}")
 async def update_chat(chat_id: int, title: str = Body(..., embed=True)):
-    print(title)
     if db.update_chat(chat_id, title) is not None:
         return {"detail": f"Chat {chat_id} tltle modified"}
 

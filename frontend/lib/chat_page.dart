@@ -70,7 +70,7 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _addSub() {
-    print('ADICIONANDO LISTENER');
+    print('ADDING LISTENER');
 
     _socSub = _socket.events.listen(
       (raw) {
@@ -106,8 +106,8 @@ class _ChatPageState extends State<ChatPage> {
           });
         }
       },
-      onDone: () => print('STREAM FECHOU'),
-      onError: (err) => print('STREAM ERRO: $err'),
+      onDone: () => print('STREAM CLOSED'),
+      onError: (err) => print('STREAM ERROR: $err'),
     );
   }
 
@@ -176,7 +176,7 @@ class _ChatPageState extends State<ChatPage> {
     final chatCtrl = Provider.of<ChatController>(context, listen: true);
     final isGenerating = widget.chat?.isGenerating ?? false;
 
-    print('--- CHAT PAGE: Reconstruindo! Índice atual: $chatId ---');
+    print('--- CHAT PAGE: Rebuilding.. Actual chat ID: $chatId ---');
     print('Models => $modelsList');
 
     return Column(
