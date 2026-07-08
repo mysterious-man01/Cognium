@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
 
 import 'package:frontend/chat_controller.dart';
 import 'package:frontend/services.dart';
@@ -204,13 +205,19 @@ class _ChatPageState extends State<ChatPage> {
                         ? Theme.of(context).colorScheme.secondary
                         : Theme.of(context).colorScheme.surface,
                   ),
-                  child: Text(
-                    data.content,
-                    style: TextStyle(
-                      color: data.role == 'user'
+                  child: MarkdownBody(
+                    data: data.content,
+                    selectable: true,
+                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
+                      p: TextStyle(
+                        color: data.role == 'user'
                           ? Theme.of(context).colorScheme.onSecondary
-                          : Theme.of(context).colorScheme.onSurface,
+                          : Theme.of(context).colorScheme.onSurface
+                      )
                     ),
+                    onTapLink: (text, href, title) {
+                      null;
+                    },
                   ),
                 ),
               );
@@ -293,7 +300,9 @@ class _ChatPageState extends State<ChatPage> {
                         : IconButton(
                             icon: const Icon(Icons.send),
                             onPressed: () {
-                              if (_textController.text.isEmpty || chatCtrl.selectedModel.isEmpty) return;
+                              if (_textController.text.isEmpty ||
+                                  chatCtrl.selectedModel.isEmpty)
+                                return;
 
                               final msg = Message(
                                 id: null,
