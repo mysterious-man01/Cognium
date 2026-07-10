@@ -20,16 +20,24 @@ class Message {
   int? id;
   String role;
   dynamic content;
+  Map<String, dynamic>? metrics;
   dynamic timestamp;
 
   Message({
     required this.id,
     required this.role,
     required this.content,
-    required this.timestamp,
+    required this.metrics,
+    required this.timestamp
   });
 
   Map<String, dynamic> toJson() {
-    return {'id': id, 'role': role, 'content': content, 'timestamp': timestamp};
+    return {
+      'id': id,
+      'role': role,
+      'content': content,
+      'metrics': metrics,
+      'timestamp': timestamp
+    };
   }
 }

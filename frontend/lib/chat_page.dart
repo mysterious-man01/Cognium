@@ -79,32 +79,43 @@ class _ChatPageState extends State<ChatPage> {
 
         if (e.containsKey('id') &&
             e.containsKey('chat_id') &&
-            e['chat_id'] == chatId &&
-            e.containsKey('content')) {
-          Message? message;
+            e['chat_id'] == chatId) {
+          if (e.containsKey('content')) {
+            Message? message;
 
-          try {
-            message = msgList.where((x) => x.id == e['id']).first;
-          } catch (_) {
-            message = Message(
-              id: e['id'],
-              role: e['role'],
-              content: e['content'],
-              timestamp: e['timestamp'],
-            );
+            try {
+              message = msgList.where((x) => x.id == e['id']).first;
+            } catch (_) {
+              message = Message(
+                id: e['id'],
+                role: e['role'],
+                content: e['content'],
+                metrics: e['metrics'],
+                timestamp: e['timestamp'],
+              );
 
-            msgList.add(message);
+              msgList.add(message);
+            }
+
+            message.content += e['content'];
+            message.metrics = e['metrics'];
+
+            if (!mounted) return;
+
+            setState(() {
+              if (_isNearBottom()) {
+                _scrollToBottom();
+              }
+            });
           }
 
-          message.content += e['content'];
+          if (e.containsKey('metrics')) {
+            final message = msgList.last;
 
-          if (!mounted) return;
-
-          setState(() {
-            if (_isNearBottom()) {
-              _scrollToBottom();
-            }
-          });
+            setState(() {
+              message.metrics = e['metrics'];
+            });
+          }
         }
       },
       onDone: () => print('STREAM CLOSED'),
@@ -139,6 +150,7 @@ class _ChatPageState extends State<ChatPage> {
                 id: item['id'],
                 role: item['role'],
                 content: item['content'],
+                metrics: null,
                 timestamp: item['timestamp'],
               ),
             );
@@ -205,19 +217,43 @@ class _ChatPageState extends State<ChatPage> {
                         ? Theme.of(context).colorScheme.secondary
                         : Theme.of(context).colorScheme.surface,
                   ),
-                  child: MarkdownBody(
-                    data: data.content,
-                    selectable: true,
-                    styleSheet: MarkdownStyleSheet.fromTheme(Theme.of(context)).copyWith(
-                      p: TextStyle(
-                        color: data.role == 'user'
-                          ? Theme.of(context).colorScheme.onSecondary
-                          : Theme.of(context).colorScheme.onSurface
-                      )
-                    ),
-                    onTapLink: (text, href, title) {
-                      null;
-                    },
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Flexible(
+                        child: MarkdownBody(
+                          data: data.content,
+                          selectable: true,
+                          styleSheet:
+                              MarkdownStyleSheet.fromTheme(
+                                Theme.of(context),
+                              ).copyWith(
+                                p: TextStyle(
+                                  color: data.role == 'user'
+                                      ? Theme.of(
+                                          context,
+                                        ).colorScheme.onSecondary
+                                      : Theme.of(context).colorScheme.onSurface,
+                                ),
+                              ),
+                          onTapLink: (text, href, title) {
+                            null;
+                          },
+                        ),
+                      ),
+
+                      if (data.role != 'user' && data.metrics != null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            "Generated ${data.metrics!['generated']} tokens • "
+                            "${data.metrics!['time']} s • "
+                            "${data.metrics!['tps']} t/s",
+                            style: Theme.of(context).textTheme.bodySmall,
+                            textAlign: TextAlign.center,
+                          ),
+                        )
+                    ],
                   ),
                 ),
               );
@@ -308,6 +344,7 @@ class _ChatPageState extends State<ChatPage> {
                                 id: null,
                                 role: 'user',
                                 content: _textController.text.trim(),
+                                metrics: null,
                                 timestamp: null,
                               );
 

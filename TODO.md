@@ -1,11 +1,11 @@
-- [ ] Add markdown renderer
-- [ ] Add generation stats
-- [ ] Add multimodal capabilities
+- [✅] Add markdown renderer
+- [✅] Add generation stats
 - [ ] Add file upload
-- [ ] Add Long-Term Memory
-- [ ] Add agentic apabilities
 - [ ] Add RAG capabilities
+- [ ] Add multimodal capabilities
+- [ ] Add Long-Term Memory
 - [ ] Add tools (web serch, etc)
+- [ ] Add agentic apabilities
 - [ ] Integrate Stable-Diffusion.cpp
 - [ ] Add other providers (ONNX, Transformers, etc)
 - [ ] Add text-2-speech (Supertonic, Kitten, Kokoro, etc)

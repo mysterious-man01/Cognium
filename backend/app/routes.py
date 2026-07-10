@@ -1,4 +1,5 @@
 import os
+import time
 import asyncio
 from threading import Thread
 from init import app, PATH
@@ -143,6 +144,9 @@ async def websocket(ws: WebSocket):
                 continue
 
             resp = ''
+            token = 0
+            start = time.perf_counter()
+
             while True:
                 piece = await queue.get()
 
@@ -151,14 +155,24 @@ async def websocket(ws: WebSocket):
 
                 if isinstance(piece, dict) and 'content' in piece:
                     resp += piece['content']
+                    token += 1
+                    delta = time.perf_counter() - start
 
                     await ws.send_json({
                         'id': msg['id'],
                         'chat_id': chat['id'],
                         'role': 'assistant',
                         'status': 'generating',
-                        'content': piece['content']
+                        'content': piece['content'],
+                        'metrics': {
+                            'generated': token,
+                            'time': round(delta, 2),
+                            'tps': round(token / delta, 2)
+                        }
                     })
+
+            elapsed = time.perf_counter() - start
+            tokens = len(engine.tokenize(resp))
 
             db.update_message(
                 chat['id'],
@@ -174,7 +188,12 @@ async def websocket(ws: WebSocket):
                 'id': msg['id'],
                 'chat_id': chat['id'],
                 'role': 'assistant',
-                'status': 'completed'
+                'status': 'completed',
+                'metrics': {
+                    'generated': tokens,
+                    'time': round(elapsed, 2),
+                    'tps': round(tokens / elapsed, 2)
+                }
             })
 
 @app.post("/v1/chat/completions")

@@ -32,6 +32,12 @@ class Engine:
 
         self._model_path = model_path
 
+    def tokenize(self, data: str):
+        if self._llm:
+            return self._llm.tokenize(text=data.encode())
+
+        raise RuntimeError('Model not loaded.')
+
     def generate_txt(
         self,
         messages,
@@ -53,3 +59,31 @@ class Engine:
 
     def generete_img(self):
         raise NotImplementedError()
+
+if __name__ == "__main__":
+    config = {
+        "max_tokens": -1,
+        "temp": 0.5,
+        "top_k": 40,
+        "top_p": 0.95,
+        "min_p": 0.05
+    }
+    model = Engine()
+
+    response =  model.generate_txt(
+        [
+            {
+                "role": "system",
+                "content": "You are an assistant."
+            },
+            {
+                "role": "user",
+                "content": "Hello There!"
+            }
+        ],
+        model_path="DATA/Models/Qwen3-0.6b/Qwen3-0.6B-Q8_0.gguf",
+        config=config
+    )
+
+    for resp in response:
+        print(resp)
