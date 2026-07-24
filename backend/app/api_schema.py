@@ -20,3 +20,9 @@ class ConfigRequest(BaseModel):
     top_k: int
     top_p: float
     min_p: float
+
+class FileRequest(BaseModel):
+    id: int
+    name: str
+    size: int
+    path: str | None

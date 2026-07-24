@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:frontend/objects.dart';
 
 Future<dynamic> fetchData(
   String endpoint,
@@ -29,6 +30,62 @@ Future<dynamic> fetchData(
   } catch (e) {
     return {'detail': 'Failed to connect to the server. Error: $e'};
   }
+}
+
+Future<dynamic> uploadFile(List<AttachmentLocal> files) async {
+  final request = http.MultipartRequest(
+    'POST',
+    Uri.parse('http://127.0.0.1:8000/uploads'),
+  );
+
+  for (final file in files) {
+    request.files.add(
+      http.MultipartFile(
+        'data',
+        http.ByteStream(file.toPlatformFile().readStream!),
+        file.size,
+        filename: file.name,
+      ),
+    );
+  }
+
+  try {
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      await for (final data in response.stream.transform(utf8.decoder)) {
+        return jsonDecode(data);
+      }
+    } else {
+      return {'detail': "File upload has failed\nCode ${response.statusCode}"};
+    }
+  } catch (e) {
+    return {'detail': "Failed to send archives -> $e"};
+  }
+}
+
+Future<AttachmentRemote> getFile(int chatId, Map<String, dynamic> data) async {
+  final request = http.Request(
+    'POST',
+    Uri.parse("http://127.0.0.1/files/$chatId"),
+  );
+
+  request.bodyBytes = utf8.encode(jsonEncode(data));
+  request.headers['content-type'] = 'application/json';
+
+  final response = await request.send();
+
+  if (response.statusCode != 200) {
+    throw Exception("Failed to get data: Code => ${response.statusCode}");
+  }
+
+  final bytes = await response.stream.toBytes();
+
+  return AttachmentRemote(
+    id: int.parse(response.headers['attachment-id']!),
+    name: response.headers['file-name']!,
+    size: int.parse(response.headers['content-size']!),
+    data: bytes,
+  );
 }
 
 Stream<String> fetchStreamData(Map<String, dynamic> data) async* {

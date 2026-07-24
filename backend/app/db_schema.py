@@ -8,11 +8,27 @@ class Chat(SQLModel, table=True):
 
     messages: list["Message"] = Relationship(back_populates="chat", cascade_delete=True)
 
+    attachments: list["Attachment"] = Relationship(back_populates="chat", cascade_delete=True)
+
 class Message(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     role: str
     content: str
     timestamp: datetime.datetime | None
 
+    attachments: list["Attachment"] = Relationship(back_populates="message", cascade_delete=True)
+
     chat_id: int | None = Field(default=True, foreign_key="chat.id", ondelete="CASCADE")
     chat: Chat | None = Relationship(back_populates="messages")
+
+class Attachment(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+    name: str
+    size: int
+    path: str | None
+
+    chat_id: int | None = Field(default=True, foreign_key="chat.id", ondelete="CASCADE")
+    chat: Chat | None = Relationship(back_populates="attachments")
+
+    message_id: int | None = Field(default=True, foreign_key="message.id", ondelete="CASCADE")
+    message: Message | None = Relationship(back_populates="attachments")

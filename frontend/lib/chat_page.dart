@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
+import 'package:frontend/widgets/attachment_card.dart';
 import 'package:provider/provider.dart';
 import 'package:flutter_markdown_plus/flutter_markdown_plus.dart';
+import 'package:file_picker/file_picker.dart';
 
 import 'package:frontend/chat_controller.dart';
 import 'package:frontend/services.dart';
@@ -24,8 +26,9 @@ class _ChatPageState extends State<ChatPage> {
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
   late int chatId;
-  List<Message> msgList = [];
-  List<dynamic> modelsList = [];
+  final List<Message> msgList = [];
+  final List<dynamic> modelsList = [];
+  final List<AttachmentLocal> attachments = [];
 
   @override
   void initState() {
@@ -48,6 +51,7 @@ class _ChatPageState extends State<ChatPage> {
 
     if (oldWidget.chat?.id != widget.chat?.id) {
       msgList.clear();
+      modelsList.clear();
 
       _getModels();
 
@@ -83,14 +87,20 @@ class _ChatPageState extends State<ChatPage> {
           if (e.containsKey('content')) {
             Message? message;
 
-            try {
-              message = msgList.where((x) => x.id == e['id']).first;
-            } catch (_) {
-              message = Message(
+            for (final m in msgList) {
+              if (m.id == e['id']) {
+                message = m;
+                break;
+              }
+            }
+
+            if (message == null) {
+              message = message = Message(
                 id: e['id'],
                 role: e['role'],
-                content: e['content'],
-                metrics: e['metrics'],
+                content: '',
+                attachments: null,
+                metrics: null,
                 timestamp: e['timestamp'],
               );
 
@@ -128,7 +138,7 @@ class _ChatPageState extends State<ChatPage> {
       final result = await fetchData('/models', 'GET');
 
       if (result is Map && result.containsKey('models')) {
-        modelsList = result['models'];
+        modelsList.addAll(result['models']);
       }
     } catch (e) {
       print('error: ChatPage -> _getModels => $e');
@@ -137,19 +147,44 @@ class _ChatPageState extends State<ChatPage> {
 
   void _getData() async {
     try {
-      final result = await fetchData('/chat/${widget.chat!.id}/message', 'GET');
+      final resultMsg = await fetchData(
+        '/chat/${widget.chat!.id}/message',
+        'GET',
+      );
 
-      if (result is List) {
-        for (final Map item in result) {
+      final resultAtt = await fetchData(
+        '/chat/${widget.chat!.id}/attachments',
+        'GET',
+      );
+
+      if (resultMsg is List) {
+        for (final Map item in resultMsg) {
           if (item.containsKey('id') &&
               item.containsKey('role') &&
               item.containsKey('content') &&
               item.containsKey('timestamp')) {
+            List<dynamic>? tempAtts;
+            if (resultAtt is List) {
+              tempAtts = resultAtt
+                  .where((e) => e['message_id'] == item['id'])
+                  .toList(growable: false);
+            }
+
             msgList.add(
               Message(
                 id: item['id'],
                 role: item['role'],
                 content: item['content'],
+                attachments: tempAtts
+                    ?.map(
+                      (e) => AttachmentRemote(
+                        id: e['id'],
+                        name: e['name'],
+                        size: e['size'],
+                        data: null,
+                      ),
+                    )
+                    .toList(growable: false),
                 metrics: null,
                 timestamp: item['timestamp'],
               ),
@@ -184,13 +219,35 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
+  Future<void> pickFiles() async {
+    FilePickerResult? result = await FilePicker.pickFiles(
+      allowMultiple: true,
+      withData: true,
+      withReadStream: true,
+    );
+
+    if (result != null) {
+      final List<AttachmentLocal> files = [];
+      for (final file in result.files) {
+        files.add(AttachmentLocal(file: file));
+      }
+
+      setState(() {
+        attachments.addAll(files);
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final chatCtrl = Provider.of<ChatController>(context, listen: true);
     final isGenerating = widget.chat?.isGenerating ?? false;
 
-    print('--- CHAT PAGE: Rebuilding.. Actual chat ID: $chatId ---');
-    print('Models => $modelsList');
+    print('--- CHAT PAGE: Rebuilding... Actual chat ID: $chatId ---');
+    // print('Models => $modelsList');
+    for (final m in msgList) {
+      print(m.toJson());
+    }
 
     return Column(
       children: [
@@ -220,26 +277,33 @@ class _ChatPageState extends State<ChatPage> {
                   child: Column(
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Flexible(
-                        child: MarkdownBody(
-                          data: data.content,
-                          selectable: true,
-                          styleSheet:
-                              MarkdownStyleSheet.fromTheme(
-                                Theme.of(context),
-                              ).copyWith(
-                                p: TextStyle(
-                                  color: data.role == 'user'
-                                      ? Theme.of(
-                                          context,
-                                        ).colorScheme.onSecondary
-                                      : Theme.of(context).colorScheme.onSurface,
-                                ),
-                              ),
-                          onTapLink: (text, href, title) {
-                            null;
-                          },
+                      if (data.attachments != null)
+                        Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            for (final att in data.attachments!)
+                              AttachmentCard(file: att, onRemove: null),
+                          ],
                         ),
+
+                      MarkdownBody(
+                        data: data.content,
+                        selectable: true,
+                        styleSheet:
+                            MarkdownStyleSheet.fromTheme(
+                              Theme.of(context),
+                            ).copyWith(
+                              p: TextStyle(
+                                color: data.role == 'user'
+                                    ? Theme.of(
+                                        context,
+                                      ).colorScheme.onSecondary
+                                    : Theme.of(context).colorScheme.onSurface,
+                              ),
+                            ),
+                        onTapLink: (text, href, title) {
+                          null;
+                        },
                       ),
 
                       if (data.role != 'user' && data.metrics != null)
@@ -252,7 +316,7 @@ class _ChatPageState extends State<ChatPage> {
                             style: Theme.of(context).textTheme.bodySmall,
                             textAlign: TextAlign.center,
                           ),
-                        )
+                        ),
                     ],
                   ),
                 ),
@@ -268,8 +332,31 @@ class _ChatPageState extends State<ChatPage> {
             width: MediaQuery.of(context).size.width / 2,
             child: Column(
               children: [
-                // Expanded(
-                //   child:
+                if (attachments.isNotEmpty)
+                  SizedBox(
+                    height: 80,
+                    child: ListView.builder(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: attachments.length,
+                      itemBuilder: (_, index) {
+                        final file = attachments[index];
+
+                        return AttachmentCard(
+                          file: file,
+                          onRemove: () {
+                            fetchData(
+                              '/uploads',
+                              'DELETE',
+                              data: {'file_name': attachments[index].name},
+                            );
+
+                            setState(() => attachments.removeAt(index));
+                          },
+                        );
+                      },
+                    ),
+                  ),
+
                 TextField(
                   controller: _textController,
                   keyboardType: TextInputType.multiline,
@@ -280,21 +367,19 @@ class _ChatPageState extends State<ChatPage> {
                   decoration: InputDecoration(labelText: "Type anything"),
                 ),
 
-                // ),
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
                     PopupMenuButton(
                       icon: const Icon(Icons.add),
                       itemBuilder: (context) => [
-                        // Image selector
                         PopupMenuItem(
                           child: ListTile(
-                            leading: const Icon(Icons.image),
-                            title: const Text('Upload Image'),
-                            subtitle: const Text('Not implemented yet'),
-                            onTap: () {
-                              null;
+                            leading: const Icon(Icons.attach_file),
+                            title: const Text('Attach File'),
+                            onTap: () async{
+                              await pickFiles();
+                              uploadFile(attachments);
                             },
                           ),
                         ),
@@ -305,7 +390,6 @@ class _ChatPageState extends State<ChatPage> {
 
                     const Spacer(),
 
-                    // const SizedBox(width: 8),
                     PopupMenuButton(
                       child: Row(
                         children: [
@@ -344,6 +428,9 @@ class _ChatPageState extends State<ChatPage> {
                                 id: null,
                                 role: 'user',
                                 content: _textController.text.trim(),
+                                attachments: attachments.toList(
+                                  growable: false,
+                                ),
                                 metrics: null,
                                 timestamp: null,
                               );
@@ -356,11 +443,24 @@ class _ChatPageState extends State<ChatPage> {
                                 'model': chatCtrl.selectedModel,
                                 'chat_id': chatId,
                                 'content': _textController.text.trim(),
+                                'attachments': attachments.map((e) {
+                                  return {
+                                    'name': e.name,
+                                    'size': e.size,
+                                    'path': null,
+                                  };
+                                }).toList(),
                               };
 
-                              _textController.clear();
+                              if (attachments.isNotEmpty) {
+                                setState(() {
+                                  attachments.clear();
+                                });
+                              }
 
                               _socket.send(chatId, body);
+
+                              _textController.clear();
                             },
                           ),
                   ],

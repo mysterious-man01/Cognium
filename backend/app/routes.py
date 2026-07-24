@@ -1,14 +1,17 @@
 import os
 import time
+import json
+import shutil
 import asyncio
+import traceback
+from platform import system
 from threading import Thread
 from init import app, PATH
 import db_conn as db
-from api_schema import ChatRequest, MsgModelRequest, ConfigRequest
+from api_schema import ChatRequest, MsgModelRequest, ConfigRequest, FileRequest
 from agent import Engine
-import json
-from fastapi import HTTPException, status, WebSocket, Body
-from fastapi.responses import StreamingResponse
+from fastapi import HTTPException, status, WebSocket, Body, Form, UploadFile, File
+from fastapi.responses import StreamingResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 app.add_middleware(
@@ -51,44 +54,51 @@ async def websocket(ws: WebSocket):
     loop = asyncio.get_running_loop()
 
     def producer(context, model_name):
-        data_path = PATH[0] if PATH[0] else PATH[1]
+        try:
+            data_path = PATH[0] if PATH[0] else PATH[1]
 
-        model_path = data_path + '/Models/' + model_name
-        print(f'files: {os.listdir(model_path)}') # To remove
-        for file in os.listdir(model_path):
-            name = file.lower()
+            model_path = data_path + '/Models/' + model_name
 
-            if 'mtp' not in name and 'mmproj' not in name and name.endswith('.gguf'):
-                model_path += f'/{file}'
-                break
+            for file in os.listdir(model_path):
+                name = file.lower()
 
-        print(f'model path -> {model_path}') # To remove
+                if 'mtp' not in name and 'mmproj' not in name and name.endswith('.gguf'):
+                    model_path += f'/{file}'
+                    break
 
-        cfg = check_cfg_file()
+            cfg = check_cfg_file()
 
-        stream = engine.generate_txt(
-            context,
-            model_path,
-            cfg,
-            stream=True
-        )
+            stream = engine.generate_txt(
+                context,
+                model_path,
+                cfg,
+                stream=True
+            )
 
-        for chunk in stream:
-            piece = chunk['choices'][-1]['delta']
+            for chunk in stream:
+                piece = chunk['choices'][-1]['delta']
+
+                asyncio.run_coroutine_threadsafe(
+                    queue.put(piece),
+                    loop
+                )
 
             asyncio.run_coroutine_threadsafe(
-                queue.put(piece),
+                queue.put(None),
+                loop
+            )
+        except Exception:
+            traceback.print_exc()
+
+            asyncio.run_coroutine_threadsafe(
+                queue.put(None),
                 loop
             )
 
-        asyncio.run_coroutine_threadsafe(
-            queue.put(None),
-            loop
-        )
-
     while True:
         request = await ws.receive_json()
-        if type(request) is dict:
+
+        if isinstance(request, dict):
             chat = db.get_chat(request['chat_id'])
             if chat is None:
                 chat = db.add_chat()
@@ -103,9 +113,27 @@ async def websocket(ws: WebSocket):
                     'id': None,
                     'role': 'user',
                     'content': request['content'],
+                    'attachments': request['attachments'],
                     'timestamp': None
                 }
             )
+
+            if request['attachments']:
+                att_path = os.path.join(
+                    PATH[0] if PATH[0] else PATH[1],
+                    'Upload'
+                )
+
+                for attachment in request['attachments']:
+                    db.update_attachment(
+                        chat['id'],
+                        attachment['name'],
+                        os.path.join(
+                            att_path,
+                            str(chat['id']),
+                            attachment['name']
+                        )
+                    )
 
             cfg = check_cfg_file()
 
@@ -115,6 +143,7 @@ async def websocket(ws: WebSocket):
             }]
 
             msgs = db.get_messages(chat['id'])
+
             if msgs is not None and len(msgs) > 0:
                 for m in msgs:
                     context.append({
@@ -133,6 +162,7 @@ async def websocket(ws: WebSocket):
                     'id': None,
                     'role': 'assistant',
                     'content': '',
+                    'attachments': [],
                     'timestamp': None
                 }
             )
@@ -195,6 +225,94 @@ async def websocket(ws: WebSocket):
                     'tps': round(tokens / elapsed, 2)
                 }
             })
+
+# In progress
+@app.post("/uploads/{chat_id}")
+async def get_file(chat_id: int, file_req: FileRequest):
+    # file = db.get_attachment(chat_id, file_name)
+
+    # if file is None:
+    #     return HTTPException(
+    #         status_code=status.HTTP_404_NOT_FOUND,
+    #         detail="Could not find file"
+    #     )
+
+    return FileResponse(
+        path=file_req.path,
+        headers={
+            'Attachment-Id': file_req.id,
+            'File-Name': file_req.name
+        }
+    )
+
+@app.post("/uploads")
+async def upload_files(
+    data: list[UploadFile] = File(...)
+):
+    uploads_path = ''
+    for d in PATH:
+        if not d or not os.path.exists(d):
+            continue
+
+        uploads_path = os.path.join(d, 'Upload')
+
+    if uploads_path == '':
+        return HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Could not find a DATA path"
+        )
+
+    for file in data:
+        os.makedirs(uploads_path, exist_ok=True)
+
+        print(f"File name: {file.filename}")
+        print(f"File mime: {file.content_type}")
+        print(f"Save into: {uploads_path}")
+
+        try:
+            with open(
+                os.path.join(uploads_path, file.filename),
+                'wb'
+            ) as buffer:
+                shutil.copyfileobj(file.file, buffer)
+        except Exception as err:
+            return HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Error while handle file {file.filename} -> {err}"
+            )
+
+    return {'detail': "Data received"}
+
+@app.delete("/uploads")
+async def delete_file(file_name: str = Body(..., embed=True)):
+    file_path = ''
+    for d in PATH:
+        if not d or not os.path.exists(d):
+            continue
+
+        file_path = os.path.join(
+            d,
+            'Upload',
+            file_name.replace(
+                '\\' if system().lower() == 'windows' else '/',
+                ''
+            )
+        )
+
+    if os.path.exists(file_path) and os.path.isfile(file_path):
+        try:
+            os.remove(file_path)
+            return {'detail': f"File {file_name} deleted"}
+        except PermissionError:
+            return HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"File {file_name} has no deletion permission"
+            )
+
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        detail=f"Unable to reach the file {file_name}"
+    )
 
 @app.post("/v1/chat/completions")
 async def chat_gen(r: ChatRequest):
@@ -348,3 +466,7 @@ async def save_message(chat_id: int, msg: MsgModelRequest):
 @app.get("/chat/{chat_id}/message")
 async def get_messages(chat_id: int):
     return db.get_messages(chat_id)
+
+@app.get("/chat/{chat_id}/attachments")
+async def get_attachment(chat_id: int):
+    return db.get_attachments_by_chat_id(chat_id)

@@ -10,6 +10,7 @@ A local-first AI platform
 - PostgreSQL support
 - Docker integration
 - Configurable inference parameters
+- Attachments upload support
 
 ## Requirements
 - Docker
