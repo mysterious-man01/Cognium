@@ -1,9 +1,14 @@
 sqlmodel==0.0.38
 psycopg[binary]==3.3.4
+pgvector==0.1.6
 
 fastapi[standard]==0.135.1
 
 # Change inference accelerator
-llama-cpp-python==0.3.22 -C cmake.args="DGGML_VULKAN=on"
+# exporting compilation config before runing installation script
+# See "Supported Backends" in https://github.com/abetlen/llama-cpp-python
+llama-cpp-python==0.3.32
 
 python-dotenv==1.2.2
+
+pymupdf==1.28.0

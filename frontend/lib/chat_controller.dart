@@ -110,7 +110,6 @@ class ChatController extends ChangeNotifier {
   void modifyIndex(int index) {
     if (_chatIndex == index) return;
 
-    print('--- CONTROLLER: Novo índice setado para: $index ---');
     _chatIndex = index;
 
     notifyListeners();

@@ -1,8 +1,8 @@
 - [✅] Add markdown renderer
 - [✅] Add generation stats
 - [✅] Add file upload
-- [ ] Add RAG capabilities
-- [ ] Add tools (web serch, etc)
+- [✅] Add RAG and summarizer capabilities
+- [✅] Add tools (web serch, etc)
 - [ ] Add multimodal capabilities
 - [ ] Add agentic apabilities
 - [ ] Add Long-Term Memory
@@ -10,4 +10,4 @@
 - [ ] Add other providers (ONNX, Transformers, etc)
 - [ ] Add text-2-speech (Supertonic, Kitten, Kokoro, etc)
 - [ ] Add speech-2-text interaction
-- [ ] Add MCP server integration
+- [ ] Add MCP integration

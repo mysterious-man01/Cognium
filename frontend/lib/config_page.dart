@@ -15,18 +15,21 @@ class _ConfigPageState extends State<ConfigPage> {
   ConfigParams config = ConfigParams(
     sysPrt:
         'You are an Artificial inteligence assistant built to answer in the question`s language.',
+    embdModel: '',
     temp: 0.8,
     maxTokens: -1,
     topK: 40,
     topP: 0.95,
     minP: 0.05,
   );
+  final List<dynamic> embdModels = [];
 
   @override
   void initState() {
     super.initState();
 
     initConfig();
+    getEmbdModels();
   }
 
   void initConfig() async {
@@ -35,6 +38,7 @@ class _ConfigPageState extends State<ConfigPage> {
 
       if (!fetchedCfg.containsKey('detail')) {
         config.sysPrt = fetchedCfg['sys_prt'];
+        config.embdModel = fetchedCfg['embedding_model'];
         config.temp = fetchedCfg['temp'];
         config.maxTokens = fetchedCfg['max_tokens'];
         config.topK = fetchedCfg['top_k'];
@@ -53,6 +57,18 @@ class _ConfigPageState extends State<ConfigPage> {
       await fetchData('/config', 'POST', data: config.toJson()) as Map;
     } catch (e) {
       print('ConfigPage -> saveCfg: Error: $e');
+    }
+  }
+
+  void getEmbdModels() async {
+    try {
+      final result = await fetchData("/models/Embedding", 'GET');
+
+      if (result is Map && result.containsKey('models')) {
+        embdModels.addAll(result['models']);
+      }
+    } catch (e) {
+      print("error: ConfigPage -> getEmbdModels => $e");
     }
   }
 
@@ -265,6 +281,38 @@ class _ConfigPageState extends State<ConfigPage> {
                           ),
                         ],
                       ),
+                    ),
+                  ],
+                ),
+              ),
+
+              Padding(
+                padding: EdgeInsets.all(10),
+                child: ExpansionTile(
+                  title: const Text("Embedding configuration"),
+                  childrenPadding: EdgeInsets.all(8.0),
+                  children: [
+                    Row(
+                      children: [
+                        const Text("Embedding model"),
+
+                        Spacer(),
+
+                        PopupMenuButton(
+                          child: Text(
+                            config.embdModel != '' ? config.embdModel : "Model",
+                          ),
+                          itemBuilder: (context) => embdModels
+                              .map(
+                                (m) => PopupMenuItem(
+                                  child: Text(m),
+                                  onTap: () =>
+                                      setState(() => config.embdModel = m),
+                                ),
+                              )
+                              .toList(),
+                        ),
+                      ],
                     ),
                   ],
                 ),

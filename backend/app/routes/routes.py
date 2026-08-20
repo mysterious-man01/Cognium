@@ -6,48 +6,25 @@ import asyncio
 import traceback
 from platform import system
 from threading import Thread
-from init import app, PATH
-import db_conn as db
-from api_schema import ChatRequest, MsgModelRequest, ConfigRequest, FileRequest
-from agent import Engine
-from fastapi import HTTPException, status, WebSocket, Body, Form, UploadFile, File
+from fastapi import APIRouter, HTTPException, status, WebSocket, Body, UploadFile, File
 from fastapi.responses import StreamingResponse, FileResponse
-from fastapi.middleware.cors import CORSMiddleware
+from config import PATH, check_cfg_file
+import database as db
+from agent import AgentExcutor
+from providers import LlamacppProvider
+from .api_schema import ChatRequest, MsgModelRequest, ConfigRequest, FileRequest
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=["*"],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"]
-)
-
-engine = None
-
-def check_cfg_file():
-    data_path = PATH[0] if PATH[0] else PATH[1]
-
-    cfg_path = data_path + '/Config'
-    if not os.path.exists(cfg_path):
-        os.makedirs(cfg_path, exist_ok=True)
-
-    with open(cfg_path + '/config.json', 'r', encoding='UTF-8') as cfg_file:
-        return json.loads(cfg_file.read())
+router = APIRouter()
 
 def generator(eng, prompt, model):
-    for line in eng.generate_txt(prompt, model, max_tokens=2048, stream=True):
-        yield line['choices'][-1]['text']
+    yield from eng.generate(model, messages=prompt, max_tokens=2048, stream=True)
 
-@app.get("/health")
+@router.get("/health")
 async def health():
     return {"detail": "System is healthy"}
 
-@app.websocket('/ws')
+@router.websocket('/ws')
 async def websocket(ws: WebSocket):
-    global engine
-    if engine is None:
-        engine = Engine()
-
     await ws.accept()
 
     queue = asyncio.Queue()
@@ -57,29 +34,26 @@ async def websocket(ws: WebSocket):
         try:
             data_path = PATH[0] if PATH[0] else PATH[1]
 
-            model_path = data_path + '/Models/' + model_name
+            model_path = os.path.join(data_path, 'Models', 'Text', model_name)
 
             for file in os.listdir(model_path):
                 name = file.lower()
 
                 if 'mtp' not in name and 'mmproj' not in name and name.endswith('.gguf'):
-                    model_path += f'/{file}'
+                    model_path = os.path.join(model_path, file)
                     break
 
             cfg = check_cfg_file()
 
-            stream = engine.generate_txt(
-                context,
+            stream = AgentExcutor().process(
                 model_path,
-                cfg,
-                stream=True
+                context,
+                **cfg
             )
 
             for chunk in stream:
-                piece = chunk['choices'][-1]['delta']
-
                 asyncio.run_coroutine_threadsafe(
-                    queue.put(piece),
+                    queue.put(chunk),
                     loop
                 )
 
@@ -118,23 +92,6 @@ async def websocket(ws: WebSocket):
                 }
             )
 
-            if request['attachments']:
-                att_path = os.path.join(
-                    PATH[0] if PATH[0] else PATH[1],
-                    'Upload'
-                )
-
-                for attachment in request['attachments']:
-                    db.update_attachment(
-                        chat['id'],
-                        attachment['name'],
-                        os.path.join(
-                            att_path,
-                            str(chat['id']),
-                            attachment['name']
-                        )
-                    )
-
             cfg = check_cfg_file()
 
             context = [{
@@ -146,9 +103,17 @@ async def websocket(ws: WebSocket):
 
             if msgs is not None and len(msgs) > 0:
                 for m in msgs:
+                    att_str = ''
+                    if len(m['attachments']) > 0:
+                        atts = [att['name'] for att in m['attachments']]
+
+                        att_str = "<attachment>\n"
+                        att_str += '\n'.join(atts)
+                        att_str += "</attachment>\n"
+
                     context.append({
                         'role': m['role'],
-                        'content': m['content']
+                        'content': att_str + m['content']
                     })
 
             Thread(
@@ -183,8 +148,8 @@ async def websocket(ws: WebSocket):
                 if piece is None:
                     break
 
-                if isinstance(piece, dict) and 'content' in piece:
-                    resp += piece['content']
+                if piece:
+                    resp += piece
                     token += 1
                     delta = time.perf_counter() - start
 
@@ -193,7 +158,7 @@ async def websocket(ws: WebSocket):
                         'chat_id': chat['id'],
                         'role': 'assistant',
                         'status': 'generating',
-                        'content': piece['content'],
+                        'content': piece,
                         'metrics': {
                             'generated': token,
                             'time': round(delta, 2),
@@ -202,7 +167,7 @@ async def websocket(ws: WebSocket):
                     })
 
             elapsed = time.perf_counter() - start
-            tokens = len(engine.tokenize(resp))
+            tokens = len(LlamacppProvider().tokenize(resp))
 
             db.update_message(
                 chat['id'],
@@ -227,7 +192,7 @@ async def websocket(ws: WebSocket):
             })
 
 # In progress
-@app.post("/uploads/{chat_id}")
+@router.post("/uploads/{chat_id}")
 async def get_file(chat_id: int, file_req: FileRequest):
     # file = db.get_attachment(chat_id, file_name)
 
@@ -245,7 +210,12 @@ async def get_file(chat_id: int, file_req: FileRequest):
         }
     )
 
-@app.post("/uploads")
+@router.get("/uploads")
+async def get_docs():
+    return db.get_documents()
+
+
+@router.post("/uploads")
 async def upload_files(
     data: list[UploadFile] = File(...)
 ):
@@ -281,9 +251,18 @@ async def upload_files(
                 detail=f"Error while handle file {file.filename} -> {err}"
             )
 
+        db.create_document({
+            'id': None,
+            'hash': None, # Make file hash here
+            'name': file.filename,
+            'size': file.size,
+            'uri': os.path.join(uploads_path, file.filename),
+            'timestamp': None # Create timestamp here
+        })
+
     return {'detail': "Data received"}
 
-@app.delete("/uploads")
+@router.delete("/uploads")
 async def delete_file(file_name: str = Body(..., embed=True)):
     file_path = ''
     for d in PATH:
@@ -302,6 +281,11 @@ async def delete_file(file_name: str = Body(..., embed=True)):
     if os.path.exists(file_path) and os.path.isfile(file_path):
         try:
             os.remove(file_path)
+
+            db.delete_document({
+                'name': file_name
+            })
+
             return {'detail': f"File {file_name} deleted"}
         except PermissionError:
             return HTTPException(
@@ -314,48 +298,36 @@ async def delete_file(file_name: str = Body(..., embed=True)):
         detail=f"Unable to reach the file {file_name}"
     )
 
-@app.post("/v1/chat/completions")
+@router.post("/v1/chat/completions")
 async def chat_gen(r: ChatRequest):
-    global engine
-    if engine is None:
-        engine = Engine()
-
     return StreamingResponse(
-        generator(engine, r.prompt, r.model),
+        generator(AgentExcutor(), r.prompt, r.model),
         media_type="text/event-stream"
     )
 
-@app.post("/v1/image/generations")
-async def img_gen(r: ChatRequest):
-    global engine
-    if engine is None:
-        engine = Engine()
-
-    # engine.generete_img()
-
-    return {"response": "img"}
-
-@app.get("/models")
-async def get_models():
+@router.get("/models/{model_type}")
+async def get_models(model_type: str):
     models = []
     for d in PATH:
         print(f"get_models -> PATH -> {d}")
         if not d or not os.path.exists(d):
             continue
 
-        path = os.path.join(d, 'Models')
+        path = os.path.join(d, 'Models', model_type)
         print(f"get_models -> Models dir -> {os.listdir(path)}")
         if os.path.isdir(path):
             for i in os.listdir(path):
-                if os.path.isdir(f'{path}/{i}') and len(os.listdir(f'{path}/{i}')) > 0:
+                dir_path = os.path.join(path, i)
+                if os.path.isdir(dir_path) and len(os.listdir(dir_path)) > 0:
                     models.append(i)
 
     return {'models': models}
 
-@app.get("/config")
+@router.get("/config")
 async def get_cfg():
     fallback_cfg = {
         'sys_prt': 'You are an Artificial inteligence assistant built to answer in the question`s language.',
+        'embedding_model': '',
         'temp': 0.8,
         'max_tokens': -1,
         'top_k': 40,
@@ -365,14 +337,12 @@ async def get_cfg():
 
     cfg_path = ''
     if PATH[0]:
-        cfg_path = f'{PATH[0]}/Config'
+        cfg_path = os.path.join(PATH[0], 'Config')
     else:
-        cfg_path = f'{PATH[1]}/Config'
-
-    print(f'cfg_path used -> {cfg_path}')
+        cfg_path = os.path.join(PATH[1], 'Config')
 
     if os.path.exists(cfg_path):
-        with open(f'{cfg_path}/config.json', 'r', encoding='UTF-8') as file:
+        with open(os.path.join(cfg_path, 'config.json'), 'r', encoding='UTF-8') as file:
             return json.loads(file.read())
     else:
         os.makedirs(
@@ -385,7 +355,7 @@ async def get_cfg():
 
         return fallback_cfg
 
-@app.post("/config")
+@router.post("/config")
 async def update_cfg(new_cfg: ConfigRequest):
     cfg_path = ''
     if PATH[0]:
@@ -399,14 +369,12 @@ async def update_cfg(new_cfg: ConfigRequest):
             exist_ok=True
         )
 
-    print(new_cfg.model_dump())
-
-    with open(f'{cfg_path}/config.json', 'w', encoding='UTF-8') as cfg_file:
+    with open(os.path.join(cfg_path, 'config.json'), 'w', encoding='UTF-8') as cfg_file:
         json.dump(new_cfg.model_dump(), cfg_file)
 
     return {"detail": "Config updated"}
 
-@app.post("/chat", status_code=status.HTTP_201_CREATED)
+@router.post("/chat", status_code=status.HTTP_201_CREATED)
 async def create_chat():
     result = db.add_chat()
     if result is not None:
@@ -417,7 +385,7 @@ async def create_chat():
         detail="Chat could not be saved"
     )
 
-@app.patch("/chat/{chat_id}")
+@router.patch("/chat/{chat_id}")
 async def update_chat(chat_id: int, title: str = Body(..., embed=True)):
     if db.update_chat(chat_id, title) is not None:
         return {"detail": f"Chat {chat_id} tltle modified"}
@@ -427,7 +395,7 @@ async def update_chat(chat_id: int, title: str = Body(..., embed=True)):
         detail="Chat could not be modified"
     )
 
-@app.delete("/chat/{chat_id}")
+@router.delete("/chat/{chat_id}")
 async def delete_chat(chat_id: int):
     if db.delete_chat(chat_id=chat_id):
         return {"detail": "Chat successful deleted"}
@@ -437,11 +405,11 @@ async def delete_chat(chat_id: int):
         detail="Chat could not be deleted"
     )
 
-@app.get("/chat")
+@router.get("/chat")
 async def get_chats():
     return db.get_chats()
 
-@app.get('/chat/{chat_id}')
+@router.get('/chat/{chat_id}')
 async def get_chat(chat_id: int):
     chat = db.get_chat(chat_id)
     if chat is None:
@@ -452,7 +420,7 @@ async def get_chat(chat_id: int):
 
     return chat
 
-@app.post("/chat/{chat_id}/message", status_code=status.HTTP_201_CREATED)
+@router.post("/chat/{chat_id}/message", status_code=status.HTTP_201_CREATED)
 async def save_message(chat_id: int, msg: MsgModelRequest):
     result = db.add_message(chat_id=chat_id, data=msg.model_dump())
     if result:
@@ -463,10 +431,6 @@ async def save_message(chat_id: int, msg: MsgModelRequest):
         detail="Message could not be saved"
     )
 
-@app.get("/chat/{chat_id}/message")
+@router.get("/chat/{chat_id}/message")
 async def get_messages(chat_id: int):
     return db.get_messages(chat_id)
-
-@app.get("/chat/{chat_id}/attachments")
-async def get_attachment(chat_id: int):
-    return db.get_attachments_by_chat_id(chat_id)

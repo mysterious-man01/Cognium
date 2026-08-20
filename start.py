@@ -36,7 +36,7 @@ def start_backend(py_exe):
     try:
         backend = spawn(
             "Backend",
-            [py_exe, '-m', 'fastapi', 'run', 'routes.py'],
+            [py_exe, '-m', 'fastapi', 'run', 'init.py'],
             cwd=os.path.join(ROOT, 'backend', 'app'),
         )
 

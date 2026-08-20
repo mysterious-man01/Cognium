@@ -1,10 +1,43 @@
-from llama_cpp import Llama
+import json
+from providers import AIRegistry, AIProvider, ToolRegistry
 
-class Engine:
+class DecissorResponse:
+    _tool_name = ''
+    _parameters = ''
+
+    def __init__(self, content: str):
+        try:
+            obj = json.loads(content)
+
+            if obj.get('tool_name'):
+                self._tool_name = obj['tool_name']
+
+            if obj.get('parameters'):
+                self._parameters = obj['parameters']
+            elif obj.get('tool_args'):
+                self._parameters = obj['tool_args']
+            elif obj.get('tool_input'):
+                self._parameters = obj['tool_input']
+
+        except json.JSONDecodeError as err:
+            raise err
+
+    @property
+    def tool_name(self):
+        return self._tool_name
+
+    @property
+    def parameters(self):
+        return self._parameters
+
+    def to_map(self):
+        return {
+            'tool_name': self._tool_name,
+            'parameters': self._parameters
+        }
+
+class AgentExcutor:
     _instance = None
-    _model_path = None
-    _llm = None
-    _sd = None
 
     def __new__(cls):
         if cls._instance is None:
@@ -12,78 +45,66 @@ class Engine:
 
         return cls._instance
 
-    def load_model(
-        self,
-        model_path,
-        config,
-        ctx=8192,
-        use_gpu=True
-    ):
-        if self._model_path == model_path:
-            return
+    def answer(self, provider: AIProvider, **cfg):
+        return provider.generate(**cfg)
 
-        self._llm = Llama(
-            model_path=model_path,
-            n_ctx=ctx,
-            n_gpu_layers=-1 if use_gpu else 0,
-            flash_attn=True,
-            verbose=False,
+    def exec_tool(self, tool_name, **params):
+        tool = ToolRegistry().get(tool_name)
+        if isinstance(tool, str):
+            return None
+
+        return tool.exec(**params)
+
+    # bad responses, low precission in tool response interpretation
+    def process(self, model_path: str, ctx, **cfg):
+        provider = AIRegistry().get('llamacpp')
+        tools = ToolRegistry()
+
+        decission = provider.generate(
+            model_path,
+            messages=ctx,
+            tools=[
+                tool[1].get_use_schema for tool in tools.tools
+            ],
+            tool_choice='auto',
+            response_format={"type": "json_object"},
+            stream=False,
+            **cfg
         )
 
-        self._model_path = model_path
+        try:
+            py_obj = DecissorResponse(decission['message']['content'])
 
-    def tokenize(self, data: str):
-        if self._llm:
-            return self._llm.tokenize(text=data.encode())
+            # Execute called tools
+            ctx.append(decission['message'])
 
-        raise RuntimeError('Model not loaded.')
+            if py_obj.tool_name:
+                tool_name = py_obj.tool_name
+                tool_args = py_obj.parameters
 
-    def generate_txt(
-        self,
-        messages,
-        model_path,
-        config,
-        stream=True
-    ):
-        self.load_model(model_path, config)
+                tool_response = self.exec_tool(
+                    tool_name=tool_name,
+                    **tool_args
+                )
 
-        yield from self._llm.create_chat_completion(
-            messages=messages,
-            max_tokens=config['max_tokens'],
-            temperature=config['temp'],
-            top_k=config['top_k'],
-            top_p=config['top_p'],
-            min_p=config['min_p'],
-            stream=stream
-        )
+                if tool_response:
+                    ctx.append({
+                        'role': 'assistant', # Workaround to make tool respons "visible" to model
+                        'name': tool_name,
+                        'content': json.loads(tool_response).get('content')
+                    })
 
-    def generete_img(self):
-        raise NotImplementedError()
+        except Exception as err:
+            raise err
 
-if __name__ == "__main__":
-    config = {
-        "max_tokens": -1,
-        "temp": 0.5,
-        "top_k": 40,
-        "top_p": 0.95,
-        "min_p": 0.05
-    }
-    model = Engine()
+        # Returns the final model answer
+        generator = self.answer(provider, model_path=model_path, messages=ctx, **cfg)
 
-    response =  model.generate_txt(
-        [
-            {
-                "role": "system",
-                "content": "You are an assistant."
-            },
-            {
-                "role": "user",
-                "content": "Hello There!"
-            }
-        ],
-        model_path="DATA/Models/Qwen3-0.6b/Qwen3-0.6B-Q8_0.gguf",
-        config=config
-    )
+        for chunk in generator:
+            piece = chunk['delta']
 
-    for resp in response:
-        print(resp)
+            if chunk.get('finish_reason') == 'stop':
+                return
+
+            if piece.get('content'):
+                yield piece['content']

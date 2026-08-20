@@ -1,20 +1,23 @@
-import os
-from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from database import get_engine
+from routes import router
 
-os.chdir(os.path.join(
-    os.path.dirname(os.path.abspath(__file__)),
-    '..',
-    '..'
-))
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    get_engine()
 
-ROOT = os.path.abspath(os.curdir)
+    yield
 
-PATH = (os.getenv('DATA_PATH'), os.path.join(ROOT, 'DATA'))
+app = FastAPI(lifespan=lifespan)
 
-load_dotenv(os.path.join(ROOT, '.env'))
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
 
-app = FastAPI()
-
-if __name__ == "__main__":
-    pass
+app.include_router(router)

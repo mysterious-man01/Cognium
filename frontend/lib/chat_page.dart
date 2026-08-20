@@ -75,8 +75,6 @@ class _ChatPageState extends State<ChatPage> {
   }
 
   void _addSub() {
-    print('ADDING LISTENER');
-
     _socSub = _socket.events.listen(
       (raw) {
         final e = jsonDecode(raw);
@@ -135,7 +133,7 @@ class _ChatPageState extends State<ChatPage> {
 
   void _getModels() async {
     try {
-      final result = await fetchData('/models', 'GET');
+      final result = await fetchData('/models/Text', 'GET');
 
       if (result is Map && result.containsKey('models')) {
         modelsList.addAll(result['models']);
@@ -152,30 +150,19 @@ class _ChatPageState extends State<ChatPage> {
         'GET',
       );
 
-      final resultAtt = await fetchData(
-        '/chat/${widget.chat!.id}/attachments',
-        'GET',
-      );
-
       if (resultMsg is List) {
         for (final Map item in resultMsg) {
           if (item.containsKey('id') &&
               item.containsKey('role') &&
               item.containsKey('content') &&
+              item.containsKey('attachments') &&
               item.containsKey('timestamp')) {
-            List<dynamic>? tempAtts;
-            if (resultAtt is List) {
-              tempAtts = resultAtt
-                  .where((e) => e['message_id'] == item['id'])
-                  .toList(growable: false);
-            }
-
             msgList.add(
               Message(
                 id: item['id'],
                 role: item['role'],
                 content: item['content'],
-                attachments: tempAtts
+                attachments: (item['attachments'] as List<dynamic>?)
                     ?.map(
                       (e) => AttachmentRemote(
                         id: e['id'],
@@ -191,6 +178,7 @@ class _ChatPageState extends State<ChatPage> {
             );
           }
         }
+
         if (mounted) {
           setState(() {
             _scrollToBottom();
@@ -243,12 +231,6 @@ class _ChatPageState extends State<ChatPage> {
     final chatCtrl = Provider.of<ChatController>(context, listen: true);
     final isGenerating = widget.chat?.isGenerating ?? false;
 
-    print('--- CHAT PAGE: Rebuilding... Actual chat ID: $chatId ---');
-    // print('Models => $modelsList');
-    for (final m in msgList) {
-      print(m.toJson());
-    }
-
     return Column(
       children: [
         Expanded(
@@ -295,9 +277,7 @@ class _ChatPageState extends State<ChatPage> {
                             ).copyWith(
                               p: TextStyle(
                                 color: data.role == 'user'
-                                    ? Theme.of(
-                                        context,
-                                      ).colorScheme.onSecondary
+                                    ? Theme.of(context).colorScheme.onSecondary
                                     : Theme.of(context).colorScheme.onSurface,
                               ),
                             ),
@@ -377,7 +357,7 @@ class _ChatPageState extends State<ChatPage> {
                           child: ListTile(
                             leading: const Icon(Icons.attach_file),
                             title: const Text('Attach File'),
-                            onTap: () async{
+                            onTap: () async {
                               await pickFiles();
                               uploadFile(attachments);
                             },
@@ -444,11 +424,7 @@ class _ChatPageState extends State<ChatPage> {
                                 'chat_id': chatId,
                                 'content': _textController.text.trim(),
                                 'attachments': attachments.map((e) {
-                                  return {
-                                    'name': e.name,
-                                    'size': e.size,
-                                    'path': null,
-                                  };
+                                  return {'name': e.name};
                                 }).toList(),
                               };
 
