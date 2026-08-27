@@ -3,8 +3,6 @@ from platform import system
 import json
 from dotenv import load_dotenv
 
-print(f'Before initialization dir -> {os.path.abspath(os.curdir)}')
-
 os.chdir(os.path.join(
     os.path.dirname(os.path.abspath(__file__)),
     '..', '..', '..' 
@@ -13,8 +11,6 @@ os.chdir(os.path.join(
 CONSTRAINT = ('1', 'y', 'yes', 'true')
 
 ROOT = os.path.abspath(os.curdir)
-
-print(f'Before initialization dir -> {ROOT}')
 
 PATH = (os.getenv('DATA_PATH'), os.path.join(ROOT, 'DATA'))
 

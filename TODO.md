@@ -1,10 +1,11 @@
 - [✅] Add markdown renderer
 - [✅] Add generation stats
 - [✅] Add file upload
+- [✅] Add tools
 - [✅] Add RAG and summarizer capabilities
-- [✅] Add tools (web serch, etc)
+- [✅] Add web search and web fetch
 - [ ] Add multimodal capabilities
-- [ ] Add agentic apabilities
+- [ ] Add agentic capabilities
 - [ ] Add Long-Term Memory
 - [ ] Integrate Stable-Diffusion.cpp
 - [ ] Add other providers (ONNX, Transformers, etc)

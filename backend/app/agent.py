@@ -1,6 +1,8 @@
 import json
 from providers import AIRegistry, AIProvider, ToolRegistry
 
+MAX_REPETITIONS = 8
+
 class DecissorResponse:
     _tool_name = ''
     _parameters = ''
@@ -14,6 +16,8 @@ class DecissorResponse:
 
             if obj.get('parameters'):
                 self._parameters = obj['parameters']
+            elif obj.get('params'):
+                self._parameters = obj['params']
             elif obj.get('tool_args'):
                 self._parameters = obj['tool_args']
             elif obj.get('tool_input'):
@@ -60,42 +64,60 @@ class AgentExcutor:
         provider = AIRegistry().get('llamacpp')
         tools = ToolRegistry()
 
-        decission = provider.generate(
-            model_path,
-            messages=ctx,
-            tools=[
-                tool[1].get_use_schema for tool in tools.tools
-            ],
-            tool_choice='auto',
-            response_format={"type": "json_object"},
-            stream=False,
-            **cfg
-        )
+        tool_list = [tool[1].get_use_schema for tool in tools.tools]
+        tool_list.append({
+            "type": "function",
+            "function": {
+                "name": 'answer',
+                "description": (
+                    "Use this when you want to answer user."
+                ),
+                "parameters": None
+            }
+        })
 
-        try:
-            py_obj = DecissorResponse(decission['message']['content'])
+        for _ in range(MAX_REPETITIONS):
+            decission = provider.generate(
+                model_path,
+                messages=ctx,
+                tools=tool_list,
+                tool_choice='auto',
+                response_format={"type": "json_object"},
+                stream=False,
+                **cfg
+            )
 
-            # Execute called tools
-            ctx.append(decission['message'])
+            try:
+                py_obj = DecissorResponse(decission['message']['content'])
 
-            if py_obj.tool_name:
-                tool_name = py_obj.tool_name
-                tool_args = py_obj.parameters
+                if py_obj.tool_name in ('', 'answer'):
+                    break
 
-                tool_response = self.exec_tool(
-                    tool_name=tool_name,
-                    **tool_args
-                )
+                # Execute called tools
+                if py_obj.tool_name:
+                    tool_name = py_obj.tool_name
+                    tool_args = py_obj.parameters
 
-                if tool_response:
-                    ctx.append({
-                        'role': 'assistant', # Workaround to make tool respons "visible" to model
-                        'name': tool_name,
-                        'content': json.loads(tool_response).get('content')
-                    })
+                    ctx.append(decission['message'])
 
-        except Exception as err:
-            raise err
+                    tool_response = self.exec_tool(
+                        tool_name=tool_name,
+                        **tool_args
+                    )
+
+                    tool_content = json.loads(tool_response).get('content')
+                    if not isinstance(tool_content, str):
+                        tool_content = json.dumps(tool_content)
+
+                    if tool_response:
+                        ctx.append({
+                            'role': 'assistant', # Workaround to make tool respons "visible" to model
+                            'name': tool_name,
+                            'content': f'<tool_response>{tool_content}</tool_response>'
+                        })
+
+            except Exception as err:
+                raise err
 
         # Returns the final model answer
         generator = self.answer(provider, model_path=model_path, messages=ctx, **cfg)

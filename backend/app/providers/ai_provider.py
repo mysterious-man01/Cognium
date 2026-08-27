@@ -70,7 +70,7 @@ class LlamacppProvider(AIProvider):
     def _load(self, **config):
         self._model = Llama(
             model_path=self._model_path,
-            chat_format=None, #config.get('chat_format', "chatml-function-calling"),
+            chat_format=None,
             verbose=False,
             n_gpu_layers=-1, #config.get('n_gpu_layers', 99),
             flash_attn=config.get('flash_attn', False),

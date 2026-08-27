@@ -4,7 +4,7 @@ import json
 from os import path, listdir
 from file_handlers.file_extractor import Extractor
 from file_handlers.chunker import chunker
-from providers import EmbeddingProvider, LlamacppProvider
+from providers import EmbeddingProvider, LlamacppProvider, WebSearchRegistry, WebFetchRegistry
 import database as db
 from config import MODELS_PATH, PLATFORM_SLASH, check_cfg_file
 
@@ -303,4 +303,146 @@ class SummarizeTool(Tool):
                 'latency': time.perf_counter() - t_init
             },
             'content': raw_summary
+        })
+
+class WebSearchTool(Tool):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+
+        return cls._instance
+
+    @property
+    def get_name(self):
+        return "web_search"
+
+    @property
+    def get_use_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.get_name,
+                "description": self.get_description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": "query for web search."
+                        },
+                        "max_results": {
+                            "type": "integer",
+                            "description": "Number of returned results."
+                        }
+                    },
+                    "required": [
+                        "query"
+                    ]
+                }
+            }
+        }
+
+    @property
+    def get_description(self):
+        return (
+            "Search the internet for factual and up-to-date information."
+            "Returns ranked web results containing titles, URLs, domains and snippets."
+            "Use this when information may be recent, uncertain or unavailable locally."
+        )
+
+    def exec(self, **kwargs):
+        t_init = time.perf_counter()
+        web_engine = WebSearchRegistry().get('ddgs')
+
+        if not kwargs.get('query'):
+            return json.dumps({
+                'metadata': {
+                    'latency': time.perf_counter() - t_init
+                },
+                'content': 'No query to search'
+            })
+
+        result = web_engine.search(
+            query=kwargs['query'],
+            max_results=kwargs.get('max_results', 10)
+        )
+
+        return json.dumps({
+            'metadata': {
+                'query': kwargs['query'],
+                'latency': time.perf_counter() - t_init
+            },
+            'content': result
+        })
+
+class WebFetchTool(Tool):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+
+        return cls._instance
+
+    @property
+    def get_name(self):
+        return "web_fetch"
+
+    @property
+    def get_use_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.get_name,
+                "description": self.get_description,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "url": {
+                            "type": "string",
+                            "description": "Target URL to fetch."
+                        }
+                    },
+                    "required": [
+                        "url"
+                    ]
+                }
+            }
+        }
+
+    @property
+    def get_description(self):
+        return (
+            "Search a specific url on the internet"
+            "Use this for deeper information search inside a web page"
+        )
+
+    def exec(self, **kwargs):
+        t_init = time.perf_counter()
+        engine = WebFetchRegistry().get('trafilatura')
+
+        if not kwargs.get('url'):
+            return json.dumps({
+                'metadata': {
+                    'latency': time.perf_counter() - t_init
+                },
+                'content': 'No URL to search'
+            })
+
+        content = engine.fetch(url=kwargs['url'])
+
+        return json.dumps({
+            'metadata': {
+                'url': kwargs['url'],
+                'latency': time.perf_counter() - t_init
+            },
+            'content': {
+                'url': content.url,
+                'title': content.title,
+                'author': content.author,
+                'date': content.date,
+                'page_text': content.content
+            }
         })

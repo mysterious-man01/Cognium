@@ -309,12 +309,10 @@ async def chat_gen(r: ChatRequest):
 async def get_models(model_type: str):
     models = []
     for d in PATH:
-        print(f"get_models -> PATH -> {d}")
         if not d or not os.path.exists(d):
             continue
 
         path = os.path.join(d, 'Models', model_type)
-        print(f"get_models -> Models dir -> {os.listdir(path)}")
         if os.path.isdir(path):
             for i in os.listdir(path):
                 dir_path = os.path.join(path, i)
