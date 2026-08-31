@@ -103,17 +103,10 @@ async def websocket(ws: WebSocket):
 
             if msgs is not None and len(msgs) > 0:
                 for m in msgs:
-                    att_str = ''
-                    if len(m['attachments']) > 0:
-                        atts = [att['name'] for att in m['attachments']]
-
-                        att_str = "<attachment>\n"
-                        att_str += '\n'.join(atts)
-                        att_str += "</attachment>\n"
-
                     context.append({
                         'role': m['role'],
-                        'content': att_str + m['content']
+                        'content': m['content'],
+                        'attachments': [att['name'] for att in m['attachments']]
                     })
 
             Thread(

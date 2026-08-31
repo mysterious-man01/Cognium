@@ -11,6 +11,10 @@ A local-first AI platform
 - Docker integration
 - Configurable inference parameters
 - Attachments upload support (PDF and raw text files)
+    - Raw text files
+    - PDF (only text)
+    - Image (PNG, JPG, JPEG)
+    - Video (MP4 only frames)
 - Tool calls support
     - Summarize
     - RAG

@@ -56,69 +56,6 @@ class AIRegistry:
     def get(self, provider_name: str):
         return self._providers[provider_name]
 
-class LlamacppProvider(AIProvider):
-    _instance = None
-
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
-            return cls._instance
-
-        return cls._instance
-
-    @override
-    def _load(self, **config):
-        self._model = Llama(
-            model_path=self._model_path,
-            chat_format=None,
-            verbose=False,
-            n_gpu_layers=-1, #config.get('n_gpu_layers', 99),
-            flash_attn=config.get('flash_attn', False),
-            n_ctx=config.get('n_ctx', 8192)
-        )
-
-    @property
-    def name(self):
-        return 'llamacpp'
-
-    def tokenize(self, data: str):
-        if self._model:
-            return self._model.tokenize(text=data.encode())
-
-        raise RuntimeError("Model not loaded")
-
-    def _stream_generator(self, stream):
-        for chunk in stream:
-            yield chunk['choices'][0]
-
-    @override
-    def generate(
-        self,
-        model_path,
-        **config
-    ):
-        self.load_model(model_path, **config)
-
-        streaming = config.get('stream', True)
-
-        response = self._model.create_chat_completion(
-            messages=config.get('messages', []),
-            tools=config.get('tools', []),
-            tool_choice=config.get('tool_choice', 'none'),
-            response_format=config.get('response_format', None),
-            max_tokens=config.get('max_tokens', -1),
-            temperature=config.get('temp', 0.8),
-            top_k=config.get('top_k', 40),
-            top_p=config.get('top_p', 0.95),
-            min_p=config.get('min_p', 0.05),
-            stream=streaming
-        )
-
-        if streaming:
-            return self._stream_generator(response)
-
-        return response['choices'][0]
-
 class EmbeddingProvider(AIProvider):
     _instance = None
 

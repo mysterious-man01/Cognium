@@ -2,9 +2,17 @@
 - [✅] Add generation stats
 - [✅] Add file upload
 - [✅] Add tools
-- [✅] Add RAG and summarizer capabilities
-- [✅] Add web search and web fetch
-- [ ] Add multimodal capabilities
+    - [✅] Add RAG
+    - [✅] Add summarizer
+    - [✅] Add web search
+    - [✅] Add web fetch
+- [✅] Add multimodal capabilities
+    - [✅] PNG
+    - [✅] JPG
+    - [✅] JPEG
+    - [❌] WebP
+    - [❌] SVG
+    - [⚠️] MP4
 - [ ] Add agentic capabilities
 - [ ] Add Long-Term Memory
 - [ ] Integrate Stable-Diffusion.cpp
