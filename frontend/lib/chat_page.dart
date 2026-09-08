@@ -207,7 +207,9 @@ class _ChatPageState extends State<ChatPage> {
     });
   }
 
-  Future<void> pickFiles() async {
+  Future<List<AttachmentLocal>> pickFiles() async {
+    final List<AttachmentLocal> files = [];
+    
     FilePickerResult? result = await FilePicker.pickFiles(
       allowMultiple: true,
       withData: true,
@@ -215,15 +217,12 @@ class _ChatPageState extends State<ChatPage> {
     );
 
     if (result != null) {
-      final List<AttachmentLocal> files = [];
       for (final file in result.files) {
         files.add(AttachmentLocal(file: file));
       }
-
-      setState(() {
-        attachments.addAll(files);
-      });
     }
+
+    return files;
   }
 
   @override
@@ -358,8 +357,14 @@ class _ChatPageState extends State<ChatPage> {
                             leading: const Icon(Icons.attach_file),
                             title: const Text('Attach File'),
                             onTap: () async {
-                              await pickFiles();
-                              uploadFile(attachments);
+                              final picContent = await pickFiles();
+                              if(picContent.isNotEmpty){
+                                await uploadFile(picContent);
+
+                                setState(() {
+                                  attachments.addAll(picContent);
+                                });
+                              }
                             },
                           ),
                         ),

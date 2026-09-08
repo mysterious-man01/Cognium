@@ -140,10 +140,13 @@ class LlamacppProvider(AIProvider):
         return 'llamacpp'
 
     def tokenize(self, data: str):
-        if self._model:
-            return self._model.tokenize(text=data.encode())
+        if not self._model_path:
+            raise RuntimeError("Model not loaded")
 
-        raise RuntimeError("Model not loaded")
+        if not self._model:
+            self.load_model(self._model_path)
+
+        return self._model.tokenize(text=data.encode())
 
     def _stream_generator(self, stream):
         for chunk in stream:

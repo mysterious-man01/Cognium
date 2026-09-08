@@ -1,7 +1,16 @@
 import json
+from enum import Enum
+from dataclasses import dataclass, field
+from typing import Any
 from providers import AIRegistry, AIProvider, ToolRegistry
 
 MAX_REPETITIONS = 8
+
+class AgentStatus(Enum):
+    RUNNING = 'running'
+    COMPLETED = 'completed'
+    FAILED = 'failed'
+    CANCELED = 'canceled'
 
 class DecissorResponse:
     _tool_name = ''
@@ -40,14 +49,67 @@ class DecissorResponse:
             'parameters': self._parameters
         }
 
+@dataclass
+class AgentState:
+    messages: list[dict[str, Any]] = field(default_factory=list)
+
+    status: Any | None = AgentStatus.RUNNING
+    iteration: int = 0
+
 class AgentExcutor:
-    _instance = None
+    state = AgentState()
+    provider = AIRegistry().get('llamacpp')
+    tools = ToolRegistry()
 
-    def __new__(cls):
-        if cls._instance is None:
-            cls._instance = super().__new__(cls)
+    # Add decision observability and tool use observability
+    def decide(self, model_path, **cfg):
+        ctx = [{
+            'role': 'system',
+            'content': """
+            You are the decision component of an autonomous agent.
+            You are not expected to perform tool operations yourself.
+            Your job is to decide which available tool should perform the operation.
+            Never refuse an operation merely because you cannot directly access the underlying resource.
+            First determine whether an available tool can perform it.
+            You must select EXACTLY ONE action per turn.
+            Return only one JSON object:
+            {
+                "tool_name": "<tool_name>",
+                "parameters": {...}
+            }
+            If the task is complete, use:
+            {
+                "tool_name": "answer",
+                "parameters": {}
+            }
+            """
+        }]
+        ctx.extend(self.state.messages[1:])
 
-        return cls._instance
+        tool_list = [tool[1].get_use_schema for tool in self.tools.tools]
+        tool_list.append({
+            "type": "function",
+            "function": {
+                "name": 'answer',
+                "description": (
+                    "Use this when you want to make the final answer.",
+                    "This function don't need to have any params."
+                ),
+                "parameters": None
+            }
+        })
+
+        decision = self.provider.generate(
+            model_path,
+            messages=ctx,
+            tools=tool_list,
+            tool_choice='auto',
+            response_format={"type": "json_object"},
+            stream=False,
+            **cfg
+        )
+
+        return decision
 
     def answer(self, provider: AIProvider, **cfg):
         return provider.generate(**cfg)
@@ -59,46 +121,25 @@ class AgentExcutor:
 
         return tool.exec(**params)
 
-    # bad responses, low precission in tool response interpretation
     def process(self, model_path: str, ctx, **cfg):
-        provider = AIRegistry().get('llamacpp')
-        tools = ToolRegistry()
+        self.state.messages = ctx
 
-        tool_list = [tool[1].get_use_schema for tool in tools.tools]
-        tool_list.append({
-            "type": "function",
-            "function": {
-                "name": 'answer',
-                "description": (
-                    "Use this when you want to answer user."
-                ),
-                "parameters": None
-            }
-        })
-
-        for _ in range(MAX_REPETITIONS):
-            decission = provider.generate(
-                model_path,
-                messages=ctx,
-                tools=tool_list,
-                tool_choice='auto',
-                response_format={"type": "json_object"},
-                stream=False,
-                **cfg
-            )
+        while self.state.status == AgentStatus.RUNNING and self.state.iteration < MAX_REPETITIONS:
+            decision = self.decide(model_path, **cfg)
+            print(f'\033[92m[AGENT]\033[0m {decision['message']['content']}')
 
             try:
-                py_obj = DecissorResponse(decission['message']['content'])
+                py_obj = DecissorResponse(decision['message']['content'])
 
                 if py_obj.tool_name in ('', 'answer'):
-                    break
+                    self.state.status = AgentStatus.COMPLETED
 
                 # Execute called tools
-                if py_obj.tool_name:
+                elif py_obj.tool_name:
                     tool_name = py_obj.tool_name
                     tool_args = py_obj.parameters
 
-                    ctx.append(decission['message'])
+                    self.state.messages.append(decision['message'])
 
                     tool_response = self.exec_tool(
                         tool_name=tool_name,
@@ -110,23 +151,30 @@ class AgentExcutor:
                         tool_content = json.dumps(tool_content)
 
                     if tool_response:
-                        ctx.append({
+                        self.state.messages.append({
                             'role': 'assistant', # Workaround to make tool respons "visible" to model
                             'name': tool_name,
                             'content': f'<tool_response>{tool_content}</tool_response>'
                         })
 
             except Exception as err:
-                raise err
+                self.state.status = AgentStatus.FAILED
+                self.state.messages.append({
+                    'role': 'assistant',
+                    'content': f'<error>{err}</error>'
+                })
+
+            self.state.iteration += 1
 
         # Returns the final model answer
-        generator = self.answer(provider, model_path=model_path, messages=ctx, **cfg)
+        if self.state.status in (AgentStatus.COMPLETED, AgentStatus.FAILED):
+            generator = self.answer(self.provider, model_path=model_path, messages=ctx, **cfg)
 
-        for chunk in generator:
-            piece = chunk['delta']
+            for chunk in generator:
+                piece = chunk['delta']
 
-            if chunk.get('finish_reason') == 'stop':
-                return
+                if chunk.get('finish_reason') == 'stop':
+                    return
 
-            if piece.get('content'):
-                yield piece['content']
+                if piece.get('content'):
+                    yield piece['content']

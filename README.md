@@ -10,7 +10,7 @@ A local-first AI platform
 - PostgreSQL support
 - Docker integration
 - Configurable inference parameters
-- Attachments upload support (PDF and raw text files)
+- Attachments upload support
     - Raw text files
     - PDF (only text)
     - Image (PNG, JPG, JPEG)
@@ -20,6 +20,7 @@ A local-first AI platform
     - RAG
     - Web search
     - Web fetch
+- Agentic capabilities
 
 ## Requirements
 - Docker

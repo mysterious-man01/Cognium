@@ -96,7 +96,7 @@ class RagTool(Tool):
 
     @property
     def get_description(self):
-        return "Search inside a document and answer questions using its content."
+        return "Search inside a text document and answer questions using its content."
 
     def exec(self, **kwargs):
         t_init = time.perf_counter()

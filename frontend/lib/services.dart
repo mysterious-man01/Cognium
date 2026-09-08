@@ -52,9 +52,8 @@ Future<dynamic> uploadFile(List<AttachmentLocal> files) async {
   try {
     final response = await request.send();
     if (response.statusCode == 200) {
-      await for (final data in response.stream.transform(utf8.decoder)) {
-        return jsonDecode(data);
-      }
+      final body = await response.stream.transform(utf8.decoder).join();
+      return jsonDecode(body);
     } else {
       return {'detail': "File upload has failed\nCode ${response.statusCode}"};
     }

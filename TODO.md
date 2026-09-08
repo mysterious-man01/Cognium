@@ -13,7 +13,7 @@
     - [❌] WebP
     - [❌] SVG
     - [⚠️] MP4
-- [ ] Add agentic capabilities
+- [✅] Add agentic capabilities
 - [ ] Add Long-Term Memory
 - [ ] Integrate Stable-Diffusion.cpp
 - [ ] Add other providers (ONNX, Transformers, etc)
