@@ -1,5 +1,5 @@
 from .ai_provider import *
-from .llamacpp.llamacpp_provider import LlamacppProvider
+from .llamacpp.llamacpp_provider import LlamacppProvider, LlamacppEmbedProvider
 from .web_search_provider import *
 from .web_fetch_provider import *
 from .tool_provider import *
@@ -12,7 +12,7 @@ def bootstrap():
         LlamacppProvider()
     )
     ai_registry.register(
-        EmbeddingProvider()
+        LlamacppEmbedProvider()
     )
 
     # Web Search Engine Register

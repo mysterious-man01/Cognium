@@ -1,7 +1,7 @@
 from sqlmodel import Session, select
 from sqlalchemy.orm import selectinload
 from .db_conn import get_engine
-from .db_schema import Chat, Message, Document, Attachment, Chunk, Summary
+from .db_schema import Chat, Message, Document, Attachment, Chunk, Summary, Memory
 
 from config import DbConfig, CONSTRAINT
 import numpy as np
@@ -336,7 +336,6 @@ def get_chunks(document_id: int):
 
 def chunk_similarity_search(document_id: int, query, top_k: int):
     with Session(get_engine()) as session:
-
         if DbConfig.DB_PERSISTANT in CONSTRAINT:
             chunks = session.exec(select(Chunk).where(
                 Chunk.document_id == document_id
@@ -413,3 +412,100 @@ def get_summary(tag):
             summary = result.summary if result else None
 
         return summary.model_dump() if summary else None
+
+def create_memory(**data):
+    mem = Memory(
+        created_at=None, # implement
+        modified_at=None, # implement
+        used_model=data['used_model'],
+        content=data['content'],
+        embedding=data['embedding']
+    )
+
+    with Session(get_engine()) as session:
+        session.add(mem)
+
+        try:
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f'Error on create_memory -> {e}')
+
+        session.refresh(mem)
+
+        return mem.model_dump()
+
+def update_memory(mem_id: int, **data):
+    with Session(get_engine()) as session:
+        mem = session.exec(select(Memory).where(
+            Memory.id == mem_id
+        )).one_or_none()
+
+        mem.content = data['content']
+        mem.embedding = data['embedding']
+        mem.used_model = data['used_model']
+
+        session.add(mem)
+
+        try:
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f'Error on update_memory -> {e}')
+
+        session.refresh(mem)
+
+        return mem.model_dump()
+
+def delete_memory(mem_id: int):
+    with Session(get_engine()) as session:
+        mem = session.exec(select(Memory).where(
+            Memory.id == mem_id
+        )).one_or_none()
+
+        if mem is None:
+            return None
+
+        session.delete(mem)
+
+        try:
+            session.commit()
+        except Exception as e:
+            session.rollback()
+            print(f'Erron on delete_memory -> {e}')
+
+        return bool(session.get(Memory, mem.id))
+
+def search_memory(query, top_k: int):
+    with Session(get_engine()) as session:
+        if DbConfig.DB_PERSISTANT in CONSTRAINT:
+            memories = session.exec(select(Memory).order_by(
+                # Common use is Memory.embedding.cosine_distance(...)
+                # Used an alternative to avoid error lint on IDE
+                Memory.__table__.columns.embedding.cosine_distance(query)).limit(top_k)
+            ).all()
+
+            return [memory.model_dump() for memory in memories]
+        else:
+            all_memories = session.exec(select(Memory)).all()
+
+            scores = []
+
+            for memory in all_memories:
+                a = np.asarray(memory.embedding)
+                b = np.asarray(query)
+
+                similarity = np.dot(a, b) / (
+                    np.linalg.norm(a) * np.linalg.norm(b)
+                )
+
+                scores.append((similarity, memory))
+
+            scores.sort(
+                key=lambda x: x[0],
+                reverse=True
+            )
+
+            memories = scores[:top_k]
+
+            return [memory.model_dump() for _, memory in memories]

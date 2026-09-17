@@ -66,3 +66,13 @@ class Summary(SQLModel, table=True):
     text: str
 
     document: Document = Relationship(back_populates="summary")
+
+class Memory(SQLModel, table=True):
+    id: int | None = Field(default=None, primary_key=True)
+
+    created_at: datetime.datetime | None
+    modified_at: datetime.datetime | None
+    used_model: str
+
+    content: str
+    embedding: list[float] = Field(sa_column=Column(Vector(1024)))

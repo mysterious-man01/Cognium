@@ -3,6 +3,7 @@ from enum import Enum
 from dataclasses import dataclass, field
 from typing import Any
 from providers import AIRegistry, AIProvider, ToolRegistry
+from .memory_module import AgentMemory
 
 MAX_REPETITIONS = 8
 
@@ -60,8 +61,8 @@ class AgentExcutor:
     state = AgentState()
     provider = AIRegistry().get('llamacpp')
     tools = ToolRegistry()
+    memory = AgentMemory(provider)
 
-    # Add decision observability and tool use observability
     def decide(self, model_path, **cfg):
         ctx = [{
             'role': 'system',
@@ -87,15 +88,43 @@ class AgentExcutor:
         ctx.extend(self.state.messages[1:])
 
         tool_list = [tool[1].get_use_schema for tool in self.tools.tools]
+
         tool_list.append({
             "type": "function",
             "function": {
                 "name": 'answer',
                 "description": (
-                    "Use this when you want to make the final answer.",
+                    "Use this when you want to make the final answer."
                     "This function don't need to have any params."
                 ),
                 "parameters": None
+            }
+        })
+
+        tool_list.append({
+            "type": "function",
+            "function": {
+                "name": 'memory_retrieval',
+                "description": (
+                    "Retrieve relevant long-term memories. "
+                    "Use this to retrieve user information, preferences, "
+                    "projects, goals, and other persistent context."
+                ),
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "query": {
+                            "type": "string",
+                            "description": (
+                                "A semantic query describing the information "
+                                "you want to retrieve from long-term memory."
+                            )
+                        }
+                    }
+                },
+                "required": [
+                    "query"
+                ]
             }
         })
 
@@ -123,6 +152,8 @@ class AgentExcutor:
 
     def process(self, model_path: str, ctx, **cfg):
         self.state.messages = ctx
+        self.state.status = AgentStatus.RUNNING
+        self.memory.decide_to_memorize(ctx, model_path, **cfg)
 
         while self.state.status == AgentStatus.RUNNING and self.state.iteration < MAX_REPETITIONS:
             decision = self.decide(model_path, **cfg)
@@ -141,10 +172,14 @@ class AgentExcutor:
 
                     self.state.messages.append(decision['message'])
 
-                    tool_response = self.exec_tool(
-                        tool_name=tool_name,
-                        **tool_args
-                    )
+                    # Execute pseudo-tools here
+                    if tool_name == 'memory_retrieval':
+                        tool_response = self.memory.memory_retrieval(**tool_args)
+                    else:
+                        tool_response = self.exec_tool(
+                            tool_name=tool_name,
+                            **tool_args
+                        )
 
                     tool_content = json.loads(tool_response).get('content')
                     if not isinstance(tool_content, str):
@@ -158,6 +193,7 @@ class AgentExcutor:
                         })
 
             except Exception as err:
+                print(f'\n\033[91m[AGENT]\033[0m Error: {err}\n')
                 self.state.status = AgentStatus.FAILED
                 self.state.messages.append({
                     'role': 'assistant',
@@ -168,6 +204,8 @@ class AgentExcutor:
 
         # Returns the final model answer
         if self.state.status in (AgentStatus.COMPLETED, AgentStatus.FAILED):
+            self.state.iteration = 0
+
             generator = self.answer(self.provider, model_path=model_path, messages=ctx, **cfg)
 
             for chunk in generator:

@@ -14,7 +14,7 @@
     - [❌] SVG
     - [⚠️] MP4
 - [✅] Add agentic capabilities
-- [ ] Add Long-Term Memory
+- [✅] Add Long-Term Memory
 - [ ] Integrate Stable-Diffusion.cpp
 - [ ] Add other providers (ONNX, Transformers, etc)
 - [ ] Add text-2-speech (Supertonic, Kitten, Kokoro, etc)

@@ -181,3 +181,34 @@ class LlamacppProvider(AIProvider):
             return self._stream_generator(response)
 
         return response['choices'][0]
+
+class LlamacppEmbedProvider(AIProvider):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+            return cls._instance
+
+        return cls._instance
+
+    @override
+    def _load(self, **config):
+        self._model = Llama(
+            model_path=self._model_path,
+            embedding=True,
+            verbose=False,
+            **config
+        )
+
+    @property
+    def name(self):
+        return 'embedding'
+
+    @override
+    def generate(self, model_path, **config):
+        self.load_model(model_path, **config)
+
+        embeddings = self._model.create_embedding(config.get('text'))
+
+        return embeddings['data'][0]['embedding']

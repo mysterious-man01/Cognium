@@ -4,7 +4,7 @@ import json
 from os import path, listdir
 from file_handlers.file_extractor import Extractor
 from file_handlers.chunker import chunker
-from providers import EmbeddingProvider, LlamacppProvider, WebSearchRegistry, WebFetchRegistry
+from providers import AIRegistry, LlamacppProvider, WebSearchRegistry, WebFetchRegistry
 import database as db
 from config import MODELS_PATH, PLATFORM_SLASH, check_cfg_file
 
@@ -101,7 +101,7 @@ class RagTool(Tool):
     def exec(self, **kwargs):
         t_init = time.perf_counter()
         cfg = check_cfg_file()
-        embedder = EmbeddingProvider()
+        embedder = AIRegistry().get('embedding')
 
         if cfg['embedding_model']:
             emb_model_path = path.join(MODELS_PATH, 'Embedding', cfg['embedding_model'])
