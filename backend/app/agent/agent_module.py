@@ -1,4 +1,5 @@
 import json
+import traceback
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Any
@@ -12,6 +13,11 @@ class AgentStatus(Enum):
     COMPLETED = 'completed'
     FAILED = 'failed'
     CANCELED = 'canceled'
+
+@dataclass
+class AgentResponse:
+    content: str
+    attachments: list[dict[str, str]] = field(default_factory=list)
 
 class DecissorResponse:
     _tool_name = ''
@@ -63,7 +69,7 @@ class AgentExcutor:
     tools = ToolRegistry()
     memory = AgentMemory(provider)
 
-    def decide(self, model_path, **cfg):
+    def decide(self, model_name, **cfg):
         ctx = [{
             'role': 'system',
             'content': """
@@ -129,7 +135,7 @@ class AgentExcutor:
         })
 
         decision = self.provider.generate(
-            model_path,
+            model_name,
             messages=ctx,
             tools=tool_list,
             tool_choice='auto',
@@ -150,17 +156,19 @@ class AgentExcutor:
 
         return tool.exec(**params)
 
-    def process(self, model_path: str, ctx, **cfg):
+    def process(self, model_name: str, ctx, **cfg):
+        att_names = []
+
         self.state.messages = ctx
         self.state.status = AgentStatus.RUNNING
-        self.memory.decide_to_memorize(ctx, model_path, **cfg)
+        self.memory.decide_to_memorize(ctx, model_name, **cfg)
 
         while self.state.status == AgentStatus.RUNNING and self.state.iteration < MAX_REPETITIONS:
-            decision = self.decide(model_path, **cfg)
-            print(f'\033[92m[AGENT]\033[0m {decision['message']['content']}')
+            decision = self.decide(model_name, **cfg)
+            print(f'\033[92m[AGENT]\033[0m {decision.content['content']}')
 
             try:
-                py_obj = DecissorResponse(decision['message']['content'])
+                py_obj = DecissorResponse(decision.content['content'])
 
                 if py_obj.tool_name in ('', 'answer'):
                     self.state.status = AgentStatus.COMPLETED
@@ -170,7 +178,7 @@ class AgentExcutor:
                     tool_name = py_obj.tool_name
                     tool_args = py_obj.parameters
 
-                    self.state.messages.append(decision['message'])
+                    self.state.messages.append(decision.content)
 
                     # Execute pseudo-tools here
                     if tool_name == 'memory_retrieval':
@@ -182,18 +190,24 @@ class AgentExcutor:
                         )
 
                     tool_content = json.loads(tool_response).get('content')
-                    if not isinstance(tool_content, str):
-                        tool_content = json.dumps(tool_content)
 
                     if tool_response:
+                        if tool_name == 'generate_image':
+                            att_names.append({
+                                'name': tool_content['image_name']
+                            })
+
                         self.state.messages.append({
-                            'role': 'assistant', # Workaround to make tool respons "visible" to model
+                            'role': 'assistant',
                             'name': tool_name,
                             'content': f'<tool_response>{tool_content}</tool_response>'
                         })
 
             except Exception as err:
+                traceback.print_exc()
+
                 print(f'\n\033[91m[AGENT]\033[0m Error: {err}\n')
+
                 self.state.status = AgentStatus.FAILED
                 self.state.messages.append({
                     'role': 'assistant',
@@ -206,13 +220,14 @@ class AgentExcutor:
         if self.state.status in (AgentStatus.COMPLETED, AgentStatus.FAILED):
             self.state.iteration = 0
 
-            generator = self.answer(self.provider, model_path=model_path, messages=ctx, **cfg)
+            generator = self.answer(self.provider, model_name=model_name, messages=ctx, **cfg)
 
             for chunk in generator:
-                piece = chunk['delta']
-
-                if chunk.get('finish_reason') == 'stop':
+                if chunk.metadata and chunk.metadata.get('finish_reason') == 'stop':
                     return
 
-                if piece.get('content'):
-                    yield piece['content']
+                if chunk.content:
+                    yield AgentResponse(
+                        content=chunk.content,
+                        attachments=att_names
+                    )

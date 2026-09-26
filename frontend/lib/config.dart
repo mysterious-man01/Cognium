@@ -1,6 +1,8 @@
 class ConfigParams {
   String sysPrt;
+  String llmModel;
   String embdModel;
+  String diffusionModel;
   double temp;
   int maxTokens;
   int topK;
@@ -9,7 +11,9 @@ class ConfigParams {
 
   ConfigParams({
     required this.sysPrt,
+    required this.llmModel,
     required this.embdModel,
+    required this.diffusionModel,
     required this.temp,
     required this.maxTokens,
     required this.topK,
@@ -20,7 +24,9 @@ class ConfigParams {
   Map<String, dynamic> toJson() {
     return {
       'sys_prt': sysPrt,
+      'llm_model': llmModel,
       'embedding_model': embdModel,
+      'diffusion_model': diffusionModel,
       'temp': temp,
       'max_tokens': maxTokens,
       'top_k': topK,

@@ -16,6 +16,7 @@ class ChatController extends ChangeNotifier {
 
   ChatController() {
     updateChatList();
+    getSelectedModel();
 
     _sub = _socket.events.listen((raw) {
       final data = jsonDecode(raw);
@@ -76,7 +77,20 @@ class ChatController extends ChangeNotifier {
     }
   }
 
-  void updateChatList() async {
+  Future<void> getSelectedModel() async {
+    try {
+      final result = await fetchData('/config', 'GET') as Map;
+
+      if (!result.containsKey('detail')) {
+        _selectedModel = result['llm_model'];
+        notifyListeners();
+      }
+    } catch (e) {
+      print('Error: $e');
+    }
+  }
+
+  Future<void> updateChatList() async {
     try {
       final result = await fetchData('/chat', 'GET');
 

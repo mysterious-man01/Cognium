@@ -1,5 +1,4 @@
 import 'dart:typed_data';
-import 'package:file_picker/file_picker.dart';
 
 class Chat {
   int? id;
@@ -53,14 +52,17 @@ class Message {
 abstract class AttachmentBase {
   String get name;
   int get size;
+  Uint8List? get data;
 }
 
 class AttachmentRemote extends AttachmentBase {
   final int? id;
+
   @override
   final String name;
   @override
   final int size;
+  @override
   final Uint8List? data;
 
   AttachmentRemote({
@@ -76,15 +78,18 @@ class AttachmentRemote extends AttachmentBase {
 }
 
 class AttachmentLocal extends AttachmentBase {
-  final PlatformFile file;
+  @override
+  final String name;
 
   @override
-  String get name => file.name;
+  final int size;
 
   @override
-  int get size => file.size;
+  final Uint8List? data;
 
-  AttachmentLocal({required this.file});
-
-  PlatformFile toPlatformFile() => file;
+  AttachmentLocal({
+    required this.name,
+    required this.size,
+    this.data
+  });
 }

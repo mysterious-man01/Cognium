@@ -42,7 +42,7 @@ Future<dynamic> uploadFile(List<AttachmentLocal> files) async {
     request.files.add(
       http.MultipartFile(
         'data',
-        http.ByteStream(file.toPlatformFile().readStream!),
+        http.ByteStream(Stream.value(file.data!)),
         file.size,
         filename: file.name,
       ),
@@ -62,14 +62,11 @@ Future<dynamic> uploadFile(List<AttachmentLocal> files) async {
   }
 }
 
-Future<AttachmentRemote> getFile(int chatId, Map<String, dynamic> data) async {
+Future<AttachmentRemote> getFile(String fileName) async {
   final request = http.Request(
-    'POST',
-    Uri.parse("http://127.0.0.1/files/$chatId"),
+    'GET',
+    Uri.parse("http://127.0.0.1:8000/uploads/$fileName"),
   );
-
-  request.bodyBytes = utf8.encode(jsonEncode(data));
-  request.headers['content-type'] = 'application/json';
 
   final response = await request.send();
 
@@ -82,7 +79,7 @@ Future<AttachmentRemote> getFile(int chatId, Map<String, dynamic> data) async {
   return AttachmentRemote(
     id: int.parse(response.headers['attachment-id']!),
     name: response.headers['file-name']!,
-    size: int.parse(response.headers['content-size']!),
+    size: int.parse(response.headers['content-length']!),
     data: bytes,
   );
 }

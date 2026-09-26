@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:frontend/widgets/attachment_card.dart';
 import 'package:provider/provider.dart';
@@ -38,8 +39,6 @@ class _ChatPageState extends State<ChatPage> {
 
     chatId = widget.chat?.id ?? 0;
 
-    _getModels();
-
     if (chatId != 0) _getData();
 
     _addSub();
@@ -52,8 +51,6 @@ class _ChatPageState extends State<ChatPage> {
     if (oldWidget.chat?.id != widget.chat?.id) {
       msgList.clear();
       modelsList.clear();
-
-      _getModels();
 
       chatId = widget.chat?.id ?? 0;
 
@@ -82,7 +79,7 @@ class _ChatPageState extends State<ChatPage> {
         if (e.containsKey('id') &&
             e.containsKey('chat_id') &&
             e['chat_id'] == chatId) {
-          if (e.containsKey('content')) {
+          if (e.containsKey('content') && e.containsKey('attachments')) {
             Message? message;
 
             for (final m in msgList) {
@@ -103,6 +100,10 @@ class _ChatPageState extends State<ChatPage> {
               );
 
               msgList.add(message);
+            }
+
+            if (message.attachments == null && e['attachments'] != null) {
+              _getFiles(message.id!, e['attachments']);
             }
 
             message.content += e['content'];
@@ -131,19 +132,23 @@ class _ChatPageState extends State<ChatPage> {
     );
   }
 
-  void _getModels() async {
-    try {
-      final result = await fetchData('/models/Text', 'GET');
+  Future<void> _getFiles(int msgId, List fileNames) async {
+    if (fileNames.isEmpty) return;
 
-      if (result is Map && result.containsKey('models')) {
-        modelsList.addAll(result['models']);
-      }
-    } catch (e) {
-      print('error: ChatPage -> _getModels => $e');
+    final List<AttachmentRemote> files = [];
+    for (final fileName in fileNames) {
+      final file = await getFile(fileName['name']);
+
+      files.add(file);
     }
+
+    final msg = msgList.where((e) => e.id == msgId).single;
+    setState(() {
+      msg.attachments = files;
+    });
   }
 
-  void _getData() async {
+  Future<void> _getData() async {
     try {
       final resultMsg = await fetchData(
         '/chat/${widget.chat!.id}/message',
@@ -157,25 +162,20 @@ class _ChatPageState extends State<ChatPage> {
               item.containsKey('content') &&
               item.containsKey('attachments') &&
               item.containsKey('timestamp')) {
-            msgList.add(
-              Message(
-                id: item['id'],
-                role: item['role'],
-                content: item['content'],
-                attachments: (item['attachments'] as List<dynamic>?)
-                    ?.map(
-                      (e) => AttachmentRemote(
-                        id: e['id'],
-                        name: e['name'],
-                        size: e['size'],
-                        data: null,
-                      ),
-                    )
-                    .toList(growable: false),
-                metrics: null,
-                timestamp: item['timestamp'],
-              ),
+            final msg = Message(
+              id: item['id'],
+              role: item['role'],
+              content: item['content'],
+              attachments: null,
+              metrics: null,
+              timestamp: item['timestamp'],
             );
+
+            msgList.add(msg);
+
+            if (msg.attachments == null && item['attachments'] != null) {
+              _getFiles(item['id'], item['attachments']);
+            }
           }
         }
 
@@ -209,7 +209,7 @@ class _ChatPageState extends State<ChatPage> {
 
   Future<List<AttachmentLocal>> pickFiles() async {
     final List<AttachmentLocal> files = [];
-    
+
     FilePickerResult? result = await FilePicker.pickFiles(
       allowMultiple: true,
       withData: true,
@@ -218,7 +218,22 @@ class _ChatPageState extends State<ChatPage> {
 
     if (result != null) {
       for (final file in result.files) {
-        files.add(AttachmentLocal(file: file));
+        List<int>? data;
+
+        if (file.readStream != null) {
+          data = [];
+          await for (final d in file.readStream!) {
+            data.addAll(d);
+          }
+        }
+
+        files.add(
+          AttachmentLocal(
+            name: file.name,
+            size: file.size,
+            data: data != null ? Uint8List.fromList(data) : null,
+          ),
+        );
       }
     }
 
@@ -263,7 +278,11 @@ class _ChatPageState extends State<ChatPage> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             for (final att in data.attachments!)
-                              AttachmentCard(file: att, onRemove: null),
+                              AttachmentCard(
+                                file: att,
+                                onRemove: null,
+                                viewOnly: true,
+                              ),
                           ],
                         ),
 
@@ -358,7 +377,7 @@ class _ChatPageState extends State<ChatPage> {
                             title: const Text('Attach File'),
                             onTap: () async {
                               final picContent = await pickFiles();
-                              if(picContent.isNotEmpty){
+                              if (picContent.isNotEmpty) {
                                 await uploadFile(picContent);
 
                                 setState(() {
@@ -374,27 +393,6 @@ class _ChatPageState extends State<ChatPage> {
                     ),
 
                     const Spacer(),
-
-                    PopupMenuButton(
-                      child: Row(
-                        children: [
-                          const Icon(Icons.token),
-                          Text(
-                            chatCtrl.selectedModel == ''
-                                ? 'Models'
-                                : chatCtrl.selectedModel,
-                          ),
-                        ],
-                      ),
-                      itemBuilder: (context) => modelsList
-                          .map(
-                            (m) => PopupMenuItem(
-                              child: Text(m),
-                              onTap: () => chatCtrl.setSelectedModel(m),
-                            ),
-                          )
-                          .toList(),
-                    ),
 
                     isGenerating
                         ? IconButton(
@@ -442,6 +440,8 @@ class _ChatPageState extends State<ChatPage> {
                               _socket.send(chatId, body);
 
                               _textController.clear();
+
+                              chatCtrl.generating(chatId);
                             },
                           ),
                   ],

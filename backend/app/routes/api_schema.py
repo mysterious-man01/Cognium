@@ -15,7 +15,9 @@ class MsgModelRequest(BaseModel):
 
 class ConfigRequest(BaseModel):
     sys_prt: str
+    llm_model: str
     embedding_model: str
+    diffusion_model: str
     temp: float
     max_tokens: int
     top_k: int

@@ -15,9 +15,14 @@ app = FastAPI(lifespan=lifespan)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_methods=["*"],
-    allow_headers=["*"]
+    allow_headers=["*"],
+    # Needed for custom headers in upload endpoint (GET)
+    expose_headers=[
+        "Attachment-Id",
+        "File-Name"
+    ]
 )
 
 app.include_router(router)

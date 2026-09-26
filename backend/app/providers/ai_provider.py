@@ -1,6 +1,15 @@
+from typing import Any
+from dataclasses import dataclass
 from abc import ABC, abstractmethod
 
+@dataclass
+class ModelResponse:
+    content_type: str
+    content: Any
+    metadata: dict | None = None
+
 class AIProvider(ABC):
+    _model_name = None
     _model_path = None
     _model = None
 
@@ -15,14 +24,18 @@ class AIProvider(ABC):
     def name(self):
         ...
 
+    @property
+    def model_name(self):
+        return self._model_name
+
     def get_model_path(self):
         return self._model_path
 
-    def load_model(self, model_path: str, **config):
-        if self._model_path == model_path:
+    def load_model(self, model_name: str, **config):
+        if self._model_name == model_name:
             return
 
-        self._model_path = model_path
+        self._model_name = model_name
 
         self._load(**config)
 
@@ -31,7 +44,7 @@ class AIProvider(ABC):
         ...
 
     @abstractmethod
-    def generate(self, model_path: str, **config):
+    def generate(self, model_name: str, **config):
         ...
 
 class AIRegistry:

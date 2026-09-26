@@ -22,6 +22,7 @@ A local-first AI platform
     - Web fetch
 - Agentic capabilities
 - Simple LTM (Long-Term Memory)
+- Image generation support
 
 ## Requirements
 - Docker

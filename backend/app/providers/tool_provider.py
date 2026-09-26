@@ -1,12 +1,14 @@
 from abc import ABC, abstractmethod
+import os
 import time
+from datetime import datetime
 import json
 from os import path, listdir
 from file_handlers.file_extractor import Extractor
 from file_handlers.chunker import chunker
 from providers import AIRegistry, LlamacppProvider, WebSearchRegistry, WebFetchRegistry
 import database as db
-from config import MODELS_PATH, PLATFORM_SLASH, check_cfg_file
+from config import PATH, MODELS_PATH, PLATFORM_SLASH, check_cfg_file
 
 class Tool(ABC):
     @property
@@ -103,17 +105,12 @@ class RagTool(Tool):
         cfg = check_cfg_file()
         embedder = AIRegistry().get('embedding')
 
-        if cfg['embedding_model']:
-            emb_model_path = path.join(MODELS_PATH, 'Embedding', cfg['embedding_model'])
-
-            for file in listdir(emb_model_path):
-                name = file.lower()
-
-                if name.endswith('.gguf') and 'embedding' in name:
-                    emb_model_path = path.join(emb_model_path, file)
-                    break
+        if cfg.get('embedding_model'):
+            emb_model_name = cfg['embedding_model']
         else:
-            emb_model_path = LlamacppProvider.instance().get_model_path()
+            emb_model_name = os.path.dirname(
+                LlamacppProvider.instance().get_model_path()
+            ).split(PLATFORM_SLASH)[-1]
 
         # Verify if file chunks/embeddings was already saved on db
         # retrive it if true instead of regenerate all chunks end embeddings
@@ -136,7 +133,7 @@ class RagTool(Tool):
 
             for chunk in chunker(section):
                 chunk.embedding = embedder.generate(
-                    emb_model_path,
+                    emb_model_name,
                     text=chunk.text
                 )
 
@@ -146,7 +143,7 @@ class RagTool(Tool):
                     {
                         'page': chunk.page,
                         'section': chunk.section,
-                        'model': path.dirname(emb_model_path).split(PLATFORM_SLASH)[-1],
+                        'model': emb_model_name,
                         'index': chunk.index,
                         'text': chunk.text,
                         'embedding': chunk.embedding
@@ -154,7 +151,7 @@ class RagTool(Tool):
                 )
 
         # Generate the query embedings for search
-        query_emb = embedder.generate(emb_model_path, text=kwargs['query'])
+        query_emb = embedder.generate(emb_model_name, text=kwargs['query'])
 
         # Search chunks that matches with query
         candidates = db.chunk_similarity_search(att['id'], query_emb, kwargs.get('top_k', 5))
@@ -253,13 +250,15 @@ class SummarizeTool(Tool):
 
         file = Extractor.get(doc['uri'])
         section = file.get_section()
-        model = LlamacppProvider.instance()
+        model = AIRegistry().get('llamacpp')
 
         # Sumarize (and extract key points) from all chunks using LLM model
         raw_summary = ''
         for chunk in chunker(section):
             resume_from_model = model.generate(
-                model.get_model_path(),
+                os.path.dirname(
+                    model.get_model_path()
+                ).split(PLATFORM_SLASH)[-1],
                 messages=[
                     command, {
                         'role': 'user',
@@ -269,16 +268,17 @@ class SummarizeTool(Tool):
             )
 
             for chunk in resume_from_model:
-                piece = chunk.get('delta')
-                if piece.get('content') is not None:
-                    raw_summary += piece['content']
+                if chunk.content:
+                    raw_summary += chunk.content
 
             raw_summary += '\n'
 
         # Re-run the resultant sumarization (and key point) to refine result
         refined_summary = ''
         resume_from_model = model.generate(
-            model.get_model_path(),
+            os.path.dirname(
+                model.get_model_path()
+            ).split(PLATFORM_SLASH)[-1],
             messages=[
                 command, {
                     'role': 'user',
@@ -288,9 +288,8 @@ class SummarizeTool(Tool):
         )
 
         for chunk in resume_from_model:
-            piece = chunk.get('delta')
-            if piece.get('content') is not None:
-                refined_summary += piece['content']
+            if chunk.content:
+                refined_summary += chunk.content
 
         refined_summary += '\n'
 
@@ -444,5 +443,100 @@ class WebFetchTool(Tool):
                 'author': content.author,
                 'date': content.date,
                 'page_text': content.content
+            }
+        })
+
+# Image generation tool
+class ImageGenTool(Tool):
+    _instance = None
+
+    def __new__(cls):
+        if cls._instance is None:
+            cls._instance = super().__new__(cls)
+
+        return cls._instance
+
+    @property
+    def get_name(self):
+        return 'generate_image'
+
+    @property
+    def get_description(self):
+        return (
+            "Generate image based on a initial prompt."
+            "Use this when asked for a generated image."
+            "Only use english language on prompt and negative prompt."
+        )
+
+    @property
+    def get_use_schema(self):
+        return {
+            "type": "function",
+            "function": {
+                "name": self.get_name,
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "prompt": {
+                            "type": "string",
+                            "description": "Prompt used to generate images."
+                        },
+                        "negative_prompt": {
+                            "type": "string",
+                            "description":
+                                "Prompt that defines what to avoid on image generation (OPTIONAL)."
+                        },
+                        "width": {
+                            "type": "integer",
+                            "description": "Value used to define image generation width (OPTIONAL)."
+                        },
+                        "height": {
+                            "type": "integer",
+                            "description": 
+                                "Value used to define image generation height (OPTIONAL)."
+                        }
+                    },
+                    "required": [
+                        "prompt"
+                    ]
+                }
+            }
+        }
+
+    def exec(self, **kwargs):
+        t_init = time.perf_counter()
+        model = AIRegistry().get('sdcpp')
+        cfg = check_cfg_file()
+
+        image = model.generate(cfg['diffusion_model'], **kwargs)
+
+        if PATH[0]:
+            generation_path = os.path.join(PATH[0], 'Generated')
+        else:
+            generation_path = os.path.join(PATH[1], 'Generated')
+
+        os.makedirs(generation_path, exist_ok=True)
+
+        image_name = f'{datetime.now().strftime("%Y-%m-%d_%H_%M_%S")}.png'
+        image_path = os.path.join(generation_path, image_name)
+
+        image[0].save(image_path, format='PNG', quality=100)
+
+        saved_image = db.create_document({
+            'id': None,
+            'hash': None,
+            'name': image_name,
+            'size': os.path.getsize(image_path),
+            'uri': image_path,
+            'timestamp': None
+        })
+
+        return json.dumps({
+            'metadata': {
+                'prompt': kwargs.get('prompt', ''),
+                'latency': time.perf_counter() - t_init
+            },
+            'content': {
+                'image_name': image_name
             }
         })

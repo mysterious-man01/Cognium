@@ -5,9 +5,12 @@ pgvector==0.1.6
 fastapi[standard]==0.135.1
 
 # Change inference accelerator
-# exporting compilation config before runing installation script
+# exporting compilation config before running installation script
 # See "Supported Backends" in https://github.com/abetlen/llama-cpp-python
 llama-cpp-python==0.3.32
+
+# see Supported Backends" in https://github.com/william-murray1204/stable-diffusion-cpp-python
+stable-diffusion-cpp-python==0.4.7
 
 python-dotenv==1.2.2
 

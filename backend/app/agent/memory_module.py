@@ -10,7 +10,7 @@ DEFAULT = '\033[0m'
 class AgentMemory:
     _provider = None
     _embedder = None
-    _emb_model_path = ''
+    _emb_model_name = ''
 
     def __init__(self, provider: AIProvider):
         self._provider = provider
@@ -18,22 +18,13 @@ class AgentMemory:
         from_cfg_file = check_cfg_file()
 
         if from_cfg_file.get('embedding_model'):
-            self._emb_model_path = path.join(
-                MODELS_PATH,
-                'Embedding',
-                from_cfg_file['embedding_model']
-            )
-
-            for file in listdir(self._emb_model_path):
-                name = file.lower()
-
-                if name.endswith('.gguf') and 'embedding' in name:
-                    self._emb_model_path = path.join(self._emb_model_path, file)
-                    break
+            self._emb_model_name = from_cfg_file['embedding_model']
         else:
-            self._emb_model_path = AIRegistry().get('llamacpp').instance().get_model_path()
+            self._emb_model_name = path.dirname(
+                AIRegistry().get('llamacpp').instance().get_model_path()
+            ).split(PLATFORM_SLASH)[-1]
 
-    def decide_to_memorize(self, messages, model_path, **cfg):
+    def decide_to_memorize(self, messages, model_name, **cfg):
         ctx = [{
             'role': 'system',
             'content': """
@@ -70,19 +61,19 @@ class AgentMemory:
         ctx.extend(messages[1:])
 
         response = self._provider.generate(
-            model_path,
+            model_name,
             messages=ctx,
             response_format={"type": "json_object"},
             stream=False,
             **cfg
         )
 
-        resp_obj = json.loads(response['message']['content'])
+        resp_obj = json.loads(response.content['content'])
 
         if resp_obj.get('memo') is not None:
-            used_model = path.dirname(self._emb_model_path).split(PLATFORM_SLASH)[-1]
+            used_model = self._emb_model_name
 
-            embed_query = self._embedder.generate(self._emb_model_path, text=resp_obj['memo'])
+            embed_query = self._embedder.generate(self._emb_model_name, text=resp_obj['memo'])
 
             # Search for similar memories
             mem_result = db.search_memory(embed_query, top_k=5)
@@ -91,7 +82,7 @@ class AgentMemory:
                 decision = self.compare_memories(
                     resp_obj['memo'],
                     mem_result,
-                    model_path,
+                    model_name,
                     **cfg
                 )
 
@@ -107,7 +98,7 @@ class AgentMemory:
                 if action.lower() == 'update':
                     for m in content:
                         embedding = self._embedder.generate(
-                            self._emb_model_path,
+                            self._emb_model_name,
                             text=m['new_content']
                         )
 
@@ -124,7 +115,7 @@ class AgentMemory:
                 if action.lower() == 'create':
                     for m in content:
                         embedding = self._embedder.generate(
-                            self._emb_model_path,
+                            self._emb_model_name,
                             text=m
                         )
 
@@ -138,7 +129,7 @@ class AgentMemory:
             else:
                 # Create a new memory if there is no saved memory
                 embedding = self._embedder.generate(
-                    self._emb_model_path,
+                    self._emb_model_name,
                     text=resp_obj['memo']
                 )
 
@@ -150,7 +141,7 @@ class AgentMemory:
 
                 print(f'\n{GREEN}[MEMORY]{DEFAULT} CREATED: {saved}\n')
 
-    def compare_memories(self, new_mem: str, memories: list, model_path: str, **cfg):
+    def compare_memories(self, new_mem: str, memories: list, model_name: str, **cfg):
         mem_content = [
             {
                 "memo_id": mem['id'],
@@ -205,18 +196,17 @@ class AgentMemory:
         })
 
         decision = self._provider.generate(
-            model_path,
+            model_name,
             messages=ctx,
             response_format={'type': 'json_object'},
             stream=False,
             **cfg
         )
 
-        return decision['message']['content']
+        return decision.content['content']
 
     def memory_retrieval(self, query):
-
-        embed_query = self._embedder.generate(self._emb_model_path, text=query)
+        embed_query = self._embedder.generate(self._emb_model_name, text=query)
 
         # Retrieve memories from db
         memories = db.search_memory(embed_query, top_k=5)

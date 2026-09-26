@@ -1,7 +1,8 @@
 from typing import override
 import os
 import base64
-from providers.ai_provider import AIProvider
+from providers.ai_provider import AIProvider, ModelResponse
+from config import MODELS_PATH
 from llama_cpp import Llama
 import llama_cpp.llama_chat_format as lcf
 from database import get_document_by_name
@@ -21,7 +22,7 @@ class LlamacppProvider(AIProvider):
         model_dir = os.path.dirname(self._model_path)
 
         for file_name in os.listdir(model_dir):
-            if 'mmproj' in file_name:
+            if 'mmproj' in file_name and file_name.endswith('.gguf'):
                 return os.path.join(model_dir, file_name)
 
         return None
@@ -36,39 +37,60 @@ class LlamacppProvider(AIProvider):
 
         if 'qwen2.5-vl' in model_path:
             return lcf.Qwen25VLChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
         elif 'llava-v1.5' in model_path:
             return lcf.Llava15ChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
         elif 'llava-v1.6' in model_path:
             return lcf.Llava16ChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
         elif 'moondream2' in model_path:
             return lcf.MoondreamChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
         elif 'nanollava' in model_path:
             return lcf.NanoLlavaChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
         elif 'llama-3-vision-alpha' in model_path:
             return lcf.Llama3VisionAlphaChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
         elif 'minicpm-v-2.6' in model_path:
             return lcf.MiniCPMv26ChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
         elif 'gemma-4' in model_path:
             return lcf.Gemma4ChatHandler(
-                clip_model_path=mmproj_path
+                clip_model_path=mmproj_path,
+                verbose=False
             )
 
     @override
     def _load(self, **config):
+        temp_path = os.path.join(
+            MODELS_PATH,
+            'Text',
+            self._model_name
+        )
+
+        for file in os.listdir(temp_path):
+            name = file.lower()
+
+            if name.endswith('.gguf') and 'mmproj' not in name and 'mtp' not in name:
+                self._model_path = os.path.join(temp_path, file)
+                break
+
         chat_handler = self._load_chat_handler()
 
         self._model = Llama(
@@ -86,9 +108,6 @@ class LlamacppProvider(AIProvider):
 
         if 'vision' in self._suports:
             for msg in ctx:
-                if isinstance(msg['content'], list):
-                    continue
-
                 message = {
                     'role': msg['role'],
                     'content': []
@@ -100,7 +119,8 @@ class LlamacppProvider(AIProvider):
                     extension = att_name.split('.')[-1].lower()
                     if extension in ('jpeg', 'jpg', 'png', 'mp4'):
                         att = get_document_by_name(att_name)
-                        if att:
+
+                        if att and msg['role'] == 'user':
                             message['content'].append({
                                 'type': 'image_url',
                                 'image_url': {'url': self._convert_img_2_base64(att['uri'])}
@@ -150,15 +170,21 @@ class LlamacppProvider(AIProvider):
 
     def _stream_generator(self, stream):
         for chunk in stream:
-            yield chunk['choices'][0]
+            content = chunk['choices'][0]
+
+            yield ModelResponse(
+                content_type='text',
+                metadata={'finish_reason': content['finish_reason']},
+                content=content['delta'].get('content', None)
+            )
 
     @override
     def generate(
         self,
-        model_path,
+        model_name,
         **config
     ):
-        self.load_model(model_path, **config)
+        self.load_model(model_name, **config)
 
         messages = self.format_ctx(config.get('messages', []))
 
@@ -180,7 +206,10 @@ class LlamacppProvider(AIProvider):
         if streaming:
             return self._stream_generator(response)
 
-        return response['choices'][0]
+        return ModelResponse(
+            content_type='text',
+            content=response['choices'][0]['message']
+        )
 
 class LlamacppEmbedProvider(AIProvider):
     _instance = None
@@ -194,6 +223,19 @@ class LlamacppEmbedProvider(AIProvider):
 
     @override
     def _load(self, **config):
+        temp_path = os.path.join(
+            MODELS_PATH,
+            'Embedding',
+            self._model_name
+        )
+
+        for file in os.listdir(temp_path):
+            name = file.lower()
+
+            if name.endswith('.gguf') and 'embedding' in name:
+                self._model_path = os.path.join(temp_path, file)
+                break
+        
         self._model = Llama(
             model_path=self._model_path,
             embedding=True,
@@ -206,8 +248,8 @@ class LlamacppEmbedProvider(AIProvider):
         return 'embedding'
 
     @override
-    def generate(self, model_path, **config):
-        self.load_model(model_path, **config)
+    def generate(self, model_name, **config):
+        self.load_model(model_name, **config)
 
         embeddings = self._model.create_embedding(config.get('text'))
 

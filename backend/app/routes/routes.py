@@ -16,9 +16,6 @@ from .api_schema import ChatRequest, MsgModelRequest, ConfigRequest, FileRequest
 
 router = APIRouter()
 
-def generator(eng, prompt, model):
-    yield from eng.generate(model, messages=prompt, max_tokens=2048, stream=True)
-
 @router.get("/health")
 async def health():
     return {"detail": "System is healthy"}
@@ -32,21 +29,10 @@ async def websocket(ws: WebSocket):
 
     def producer(context, model_name):
         try:
-            data_path = PATH[0] if PATH[0] else PATH[1]
-
-            model_path = os.path.join(data_path, 'Models', 'Text', model_name)
-
-            for file in os.listdir(model_path):
-                name = file.lower()
-
-                if 'mtp' not in name and 'mmproj' not in name and name.endswith('.gguf'):
-                    model_path = os.path.join(model_path, file)
-                    break
-
             cfg = check_cfg_file()
 
             stream = AgentExcutor().process(
-                model_path,
+                cfg.get('llm_model', ''),
                 context,
                 **cfg
             )
@@ -75,7 +61,7 @@ async def websocket(ws: WebSocket):
         if isinstance(request, dict):
             chat = db.get_chat(request['chat_id'])
             if chat is None:
-                chat = db.add_chat()
+                chat = db.add_chat(title=request['content'])
                 await ws.send_json({
                     'chat_id': 0,
                     'new_id': chat['id']
@@ -132,6 +118,7 @@ async def websocket(ws: WebSocket):
                 continue
 
             resp = ''
+            atts = []
             token = 0
             start = time.perf_counter()
 
@@ -141,8 +128,11 @@ async def websocket(ws: WebSocket):
                 if piece is None:
                     break
 
-                if piece:
-                    resp += piece
+                if piece.content:
+                    if len(atts) == 0 and len(piece.attachments) > 0:
+                        atts.extend(piece.attachments)
+
+                    resp += piece.content
                     token += 1
                     delta = time.perf_counter() - start
 
@@ -151,7 +141,8 @@ async def websocket(ws: WebSocket):
                         'chat_id': chat['id'],
                         'role': 'assistant',
                         'status': 'generating',
-                        'content': piece,
+                        'content': piece.content,
+                        'attachments': piece.attachments,
                         'metrics': {
                             'generated': token,
                             'time': round(delta, 2),
@@ -168,6 +159,7 @@ async def websocket(ws: WebSocket):
                     'id': msg['id'],
                     'role': 'assistant',
                     'content': resp,
+                    'attachments': atts,
                     'timestamp': None,
                 }
             )
@@ -184,22 +176,21 @@ async def websocket(ws: WebSocket):
                 }
             })
 
-# In progress
-@router.post("/uploads/{chat_id}")
-async def get_file(chat_id: int, file_req: FileRequest):
-    # file = db.get_attachment(chat_id, file_name)
+@router.get("/uploads/{file_name}")
+async def get_file(file_name: str):
+    file = db.get_document_by_name(file_name)
 
-    # if file is None:
-    #     return HTTPException(
-    #         status_code=status.HTTP_404_NOT_FOUND,
-    #         detail="Could not find file"
-    #     )
+    if file is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail=f"Could not find file {file_name}"
+        )
 
     return FileResponse(
-        path=file_req.path,
+        path=file['uri'],
         headers={
-            'Attachment-Id': file_req.id,
-            'File-Name': file_req.name
+            'Attachment-Id': str(file['id']),
+            'File-Name': file['name']
         }
     )
 
@@ -291,13 +282,6 @@ async def delete_file(file_name: str = Body(..., embed=True)):
         detail=f"Unable to reach the file {file_name}"
     )
 
-@router.post("/v1/chat/completions")
-async def chat_gen(r: ChatRequest):
-    return StreamingResponse(
-        generator(AgentExcutor(), r.prompt, r.model),
-        media_type="text/event-stream"
-    )
-
 @router.get("/models/{model_type}")
 async def get_models(model_type: str):
     models = []
@@ -318,7 +302,9 @@ async def get_models(model_type: str):
 async def get_cfg():
     fallback_cfg = {
         'sys_prt': 'You are an Artificial inteligence assistant built to answer in the question`s language.',
+        'llm_model': '',
         'embedding_model': '',
+        'diffusion_model': '',
         'temp': 0.8,
         'max_tokens': -1,
         'top_k': 40,

@@ -1,5 +1,6 @@
 from .ai_provider import *
 from .llamacpp.llamacpp_provider import LlamacppProvider, LlamacppEmbedProvider
+from.image_gen import SDCppProvider
 from .web_search_provider import *
 from .web_fetch_provider import *
 from .tool_provider import *
@@ -13,6 +14,9 @@ def bootstrap():
     )
     ai_registry.register(
         LlamacppEmbedProvider()
+    )
+    ai_registry.register(
+        SDCppProvider()
     )
 
     # Web Search Engine Register
@@ -43,6 +47,9 @@ def bootstrap():
     )
     tool_registry.register(
         WebFetchTool()
+    )
+    tool_registry.register(
+        ImageGenTool()
     )
 
 bootstrap()

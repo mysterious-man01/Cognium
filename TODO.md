@@ -15,8 +15,14 @@
     - [⚠️] MP4
 - [✅] Add agentic capabilities
 - [✅] Add Long-Term Memory
-- [ ] Integrate Stable-Diffusion.cpp
-- [ ] Add other providers (ONNX, Transformers, etc)
-- [ ] Add text-2-speech (Supertonic, Kitten, Kokoro, etc)
+- [✅] Integrate Stable-Diffusion.cpp
+- [ ] Add text-2-speech
+    - [ ] Supertonic
+    - [ ] Kitten
+    - [ ] Kokoro
 - [ ] Add speech-2-text interaction
 - [ ] Add MCP integration
+- [ ] Add other providers
+    - [✅] Llama.cpp
+    - [ ] ONNX
+    - [ ] Transformers

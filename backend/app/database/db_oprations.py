@@ -6,8 +6,8 @@ from .db_schema import Chat, Message, Document, Attachment, Chunk, Summary, Memo
 from config import DbConfig, CONSTRAINT
 import numpy as np
 
-def add_chat():
-    new_chat = Chat()
+def add_chat(title: str = None):
+    new_chat = Chat(title=title)
 
     with Session(get_engine()) as session:
         session.add(new_chat)
@@ -217,7 +217,7 @@ def add_message(chat_id: int, data):
             session.rollback()
             print(f"Error on add_message -> {e}")
 
-        session.refresh(msg)
+        session.refresh(msg) # OPITIONAL
 
         result = session.exec(select(Message).where(
             Message.chat_id == chat_id, Message.id == msg.id
@@ -237,6 +237,17 @@ def update_message(chat_id: int, data):
         msg.role = data['role']
         msg.content = data['content']
         msg.timestamp = data['timestamp']
+
+        if isinstance(data.get('attachments'), list):
+            for att in data['attachments']:
+                doc = get_document_by_name(att['name'])
+
+                msg.attachments.append(
+                    Attachment(
+                        message_id=msg.id,
+                        document_id=doc['id']
+                    )
+                )
 
         session.add(msg)
 
