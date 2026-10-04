@@ -165,7 +165,7 @@ class AgentExcutor:
 
         while self.state.status == AgentStatus.RUNNING and self.state.iteration < MAX_REPETITIONS:
             decision = self.decide(model_name, **cfg)
-            print(f'\033[92m[AGENT]\033[0m {decision.content['content']}')
+            print(f"\033[92m[AGENT]\033[0m {decision.content['content']}")
 
             try:
                 py_obj = DecissorResponse(decision.content['content'])

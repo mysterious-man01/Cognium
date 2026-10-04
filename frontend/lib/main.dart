@@ -3,12 +3,16 @@ import 'package:provider/provider.dart';
 
 import 'package:frontend/proxy_page.dart';
 import 'package:frontend/chat_controller.dart';
+import 'package:frontend/media.dart';
 
 void main() {
   runApp(MultiProvider(
     providers: [
       ChangeNotifierProvider(
         create: (context) => ChatController(),
+      ),
+      ChangeNotifierProvider(
+        create: (context) => TTSPlayer()
       ),
     ],
     child: const MainApp()

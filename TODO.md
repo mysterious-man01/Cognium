@@ -16,10 +16,10 @@
 - [✅] Add agentic capabilities
 - [✅] Add Long-Term Memory
 - [✅] Integrate Stable-Diffusion.cpp
-- [ ] Add text-2-speech
-    - [ ] Supertonic
-    - [ ] Kitten
-    - [ ] Kokoro
+- [✅] Add text-2-speech
+    - [✅] Kitten
+    - [ ] Piper
+    - [ ] XTTSv2
 - [ ] Add speech-2-text interaction
 - [ ] Add MCP integration
 - [ ] Add other providers

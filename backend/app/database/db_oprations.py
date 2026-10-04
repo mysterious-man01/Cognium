@@ -287,6 +287,17 @@ def get_messages(chat_id: int):
             ]
         } for msg in msg_obj_list]
 
+def get_message(chat_id: int, msg_id: int):
+    with Session(get_engine()) as session:
+        msg = session.exec(
+            select(Message).where(
+                Message.chat_id == chat_id,
+                Message.id == msg_id
+            )
+        ).one_or_none()
+
+        return msg.model_dump() if msg is not None else None
+
 def save_chunk(document_id: int, data):
     chunk = Chunk(
         id=None,

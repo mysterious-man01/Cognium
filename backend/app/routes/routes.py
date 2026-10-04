@@ -7,12 +7,12 @@ import traceback
 from platform import system
 from threading import Thread
 from fastapi import APIRouter, HTTPException, status, WebSocket, Body, UploadFile, File
-from fastapi.responses import StreamingResponse, FileResponse
+from fastapi.responses import FileResponse, Response
 from config import PATH, check_cfg_file
 import database as db
 from agent import AgentExcutor
-from providers import LlamacppProvider
-from .api_schema import ChatRequest, MsgModelRequest, ConfigRequest, FileRequest
+from providers import LlamacppProvider, TTSRegistry, markdown_to_tts
+from .api_schema import MsgModelRequest, ConfigRequest, FileRequest, TTSRequest
 
 router = APIRouter()
 
@@ -114,7 +114,7 @@ async def websocket(ws: WebSocket):
             if msg is not None:
                 await ws.send_json(msg)
             else:
-                await ws.send_json({'error': f'Unable to create message on chat {chat['id']}'})
+                await ws.send_json({'error': f"Unable to create message on chat {chat['id']}"})
                 continue
 
             resp = ''
@@ -309,7 +309,10 @@ async def get_cfg():
         'max_tokens': -1,
         'top_k': 40,
         'top_p': 0.95,
-        'min_p': 0.05
+        'min_p': 0.05,
+        'tts_model': '',
+        'voice': '',
+        'tts_speed': 1.0
     }
 
     cfg_path = ''
@@ -411,3 +414,54 @@ async def save_message(chat_id: int, msg: MsgModelRequest):
 @router.get("/chat/{chat_id}/message")
 async def get_messages(chat_id: int):
     return db.get_messages(chat_id)
+
+@router.get("/voices")
+async def get_voices():
+    cfg = check_cfg_file()
+    tts_provider_name = cfg.get('tts_provider', 'kitten') # For future implementation
+
+    provider = TTSRegistry().get(tts_provider_name)
+
+    voices = provider.get_voices(cfg.get('tts_model', ''))
+
+    return {'voices': voices}
+
+@router.post("/tts")
+async def get_transcription(request: TTSRequest):
+    msg = db.get_message(request.chat_id, request.msg_id)
+    cfg = check_cfg_file()
+
+    if not msg:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Message not found"
+        )
+
+    tts_provider_name = cfg.get('tts_provider', 'kitten')
+    tts = TTSRegistry().get(tts_provider_name)
+
+    clean_text = markdown_to_tts(msg['content'])
+
+    audio_wav = tts.synthesize(
+        text=clean_text,
+        voice=cfg.get('voice'),
+        speed=cfg.get('tts_speed')
+    )
+
+    return Response(
+        content=audio_wav.audio,
+        media_type="audio/wav"
+    )
+
+@router.get("/tts/models")
+async def get_tts_models():
+    cfg = check_cfg_file()
+
+    tts_provider_name = cfg.get('tts_provider', 'kitten')
+    tts = TTSRegistry().get(tts_provider_name)
+
+    models = tts.models
+
+    return {
+        'models': models
+    }

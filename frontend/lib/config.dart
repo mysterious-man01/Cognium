@@ -8,6 +8,9 @@ class ConfigParams {
   int topK;
   double topP;
   double minP;
+  String ttsModel;
+  String voice;
+  double ttsSpeed;
 
   ConfigParams({
     required this.sysPrt,
@@ -19,6 +22,9 @@ class ConfigParams {
     required this.topK,
     required this.topP,
     required this.minP,
+    required this.ttsModel,
+    required this.voice,
+    required this.ttsSpeed,
   });
 
   Map<String, dynamic> toJson() {
@@ -32,6 +38,9 @@ class ConfigParams {
       'top_k': topK,
       'top_p': topP,
       'min_p': minP,
+      'tts_model': ttsModel,
+      'voice': voice,
+      'tts_speed': ttsSpeed,
     };
   }
 }

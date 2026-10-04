@@ -11,6 +11,7 @@ import 'package:frontend/chat_controller.dart';
 import 'package:frontend/services.dart';
 import 'package:frontend/objects.dart';
 import 'package:frontend/websocket.dart';
+import 'package:frontend/media.dart';
 
 class ChatPage extends StatefulWidget {
   final Chat? chat;
@@ -243,6 +244,7 @@ class _ChatPageState extends State<ChatPage> {
   @override
   Widget build(BuildContext context) {
     final chatCtrl = Provider.of<ChatController>(context, listen: true);
+    final ttsPlayer = Provider.of<TTSPlayer>(context, listen: true);
     final isGenerating = widget.chat?.isGenerating ?? false;
 
     return Column(
@@ -304,17 +306,49 @@ class _ChatPageState extends State<ChatPage> {
                         },
                       ),
 
-                      if (data.role != 'user' && data.metrics != null)
-                        Padding(
-                          padding: const EdgeInsets.only(top: 8),
-                          child: Text(
-                            "Generated ${data.metrics!['generated']} tokens • "
-                            "${data.metrics!['time']} s • "
-                            "${data.metrics!['tps']} t/s",
-                            style: Theme.of(context).textTheme.bodySmall,
-                            textAlign: TextAlign.center,
-                          ),
-                        ),
+                      Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (data.role != 'user' && data.metrics != null)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child: Text(
+                                "Generated ${data.metrics!['generated']} tokens • "
+                                "${data.metrics!['time']} s • "
+                                "${data.metrics!['tps']} t/s",
+                                style: Theme.of(context).textTheme.bodySmall,
+                                textAlign: TextAlign.center,
+                              ),
+                            ),
+
+                          if (data.role != 'user' &&
+                              data.content != '' &&
+                              !isGenerating)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 8),
+                              child:
+                                  (ttsPlayer.isPlaying &&
+                                      ttsPlayer.id == data.id!)
+                                  ? IconButton(
+                                      icon: const Icon(Icons.stop),
+                                      onPressed: () => ttsPlayer.stop(),
+                                    )
+                                  : IconButton(
+                                      icon: const Icon(Icons.volume_up),
+                                      onPressed: () async {
+                                        final result = await fetchTTSData(
+                                          chatId: chatId,
+                                          msgId: data.id!,
+                                        );
+
+                                        if (result != null) {
+                                          ttsPlayer.play(result, data.id!);
+                                        }
+                                      },
+                                    ),
+                            ),
+                        ],
+                      ),
                     ],
                   ),
                 ),

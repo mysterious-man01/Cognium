@@ -1,6 +1,9 @@
 from abc import ABC, abstractmethod
-from typing import override
 from ddgs import DDGS
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
 
 class SearchResult:
     ...

@@ -23,9 +23,16 @@ class ConfigRequest(BaseModel):
     top_k: int
     top_p: float
     min_p: float
+    tts_model: str
+    voice: str
+    tts_speed: float
 
 class FileRequest(BaseModel):
     id: int
     name: str
     size: int
     path: str | None
+
+class TTSRequest(BaseModel):
+    chat_id: int
+    msg_id: int

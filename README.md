@@ -23,11 +23,12 @@ A local-first AI platform
 - Agentic capabilities
 - Simple LTM (Long-Term Memory)
 - Image generation support
+- Text To Speech support
 
 ## Requirements
 - Docker
 - Docker-compose
-- Python 3.10+
+- Python 3.12 >= and < 3.14
 
 ## Installation
 1. Clone this repository.

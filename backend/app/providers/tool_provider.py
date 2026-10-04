@@ -3,12 +3,11 @@ import os
 import time
 from datetime import datetime
 import json
-from os import path, listdir
 from file_handlers.file_extractor import Extractor
 from file_handlers.chunker import chunker
 from providers import AIRegistry, LlamacppProvider, WebSearchRegistry, WebFetchRegistry
 import database as db
-from config import PATH, MODELS_PATH, PLATFORM_SLASH, check_cfg_file
+from config import PATH, PLATFORM_SLASH, check_cfg_file
 
 class Tool(ABC):
     @property
@@ -522,7 +521,7 @@ class ImageGenTool(Tool):
 
         image[0].save(image_path, format='PNG', quality=100)
 
-        saved_image = db.create_document({
+        db.create_document({
             'id': None,
             'hash': None,
             'name': image_name,

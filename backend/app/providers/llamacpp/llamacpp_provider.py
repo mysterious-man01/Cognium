@@ -1,4 +1,3 @@
-from typing import override
 import os
 import base64
 from providers.ai_provider import AIProvider, ModelResponse
@@ -6,6 +5,10 @@ from config import MODELS_PATH
 from llama_cpp import Llama
 import llama_cpp.llama_chat_format as lcf
 from database import get_document_by_name
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
 
 class LlamacppProvider(AIProvider):
     _instance = None
@@ -153,7 +156,7 @@ class LlamacppProvider(AIProvider):
     def _convert_img_2_base64(self, img_path: str):
         with open(img_path, 'rb') as img:
             b64_data = base64.b64encode(img.read()).decode('utf-8')
-            return f'data:image/{img_path.split('.')[-1]};base64,{b64_data}'
+            return f"data:image/{img_path.split('.')[-1]};base64,{b64_data}"
 
     @property
     def name(self):
@@ -235,7 +238,7 @@ class LlamacppEmbedProvider(AIProvider):
             if name.endswith('.gguf') and 'embedding' in name:
                 self._model_path = os.path.join(temp_path, file)
                 break
-        
+
         self._model = Llama(
             model_path=self._model_path,
             embedding=True,

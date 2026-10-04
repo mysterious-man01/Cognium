@@ -1,8 +1,11 @@
 import os
-from typing import override
 from providers import AIProvider
 from config import MODELS_PATH
 from stable_diffusion_cpp import StableDiffusion
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
 
 class SDCppProvider(AIProvider):
     _instance = None

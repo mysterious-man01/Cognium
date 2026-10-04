@@ -54,7 +54,7 @@ class TrafilaturaWebFetch(WebFetchProvider):
 
         html_page = fetch_url(kwargs['url'])
         if not html_page:
-            return f'page from "{kwargs['url']}" not found'
+            return f"page from \"{kwargs['url']}\" not found"
 
         extracted_content = extract(
             html_page,
@@ -63,7 +63,7 @@ class TrafilaturaWebFetch(WebFetchProvider):
             include_comments=False
         )
         if not extracted_content:
-            return f'Extraction of "{kwargs['url']}" has failed'
+            return f"Extraction of \"{kwargs['url']}\" has failed"
 
         content = json.loads(extracted_content)
 

@@ -25,11 +25,17 @@ class _ConfigPageState extends State<ConfigPage> {
     topK: 40,
     topP: 0.95,
     minP: 0.05,
+    ttsModel: '',
+    voice: '',
+    ttsSpeed: 1.0,
   );
 
   final List<dynamic> llmModels = [];
   final List<dynamic> embdModels = [];
   final List<dynamic> diffusionModels = [];
+  final List<dynamic> ttsModels = [];
+
+  final List<dynamic> voices = [];
 
   @override
   void initState() {
@@ -39,6 +45,8 @@ class _ConfigPageState extends State<ConfigPage> {
     getLlmModels();
     getEmbdModels();
     getDiffusionModels();
+    getTTSModels();
+    getVoices();
   }
 
   Future<void> initConfig() async {
@@ -55,6 +63,9 @@ class _ConfigPageState extends State<ConfigPage> {
         config.topK = fetchedCfg['top_k'];
         config.topP = fetchedCfg['top_p'];
         config.minP = fetchedCfg['min_p'];
+        config.ttsModel = fetchedCfg['tts_model'];
+        config.voice = fetchedCfg['voice'];
+        config.ttsSpeed = fetchedCfg['tts_speed'];
 
         setState(() {});
       }
@@ -76,7 +87,7 @@ class _ConfigPageState extends State<ConfigPage> {
       final result = await fetchData('/models/Text', 'GET');
 
       if (result is Map && result.containsKey('models')) {
-        llmModels.addAll(result['models']);
+        setState(() => llmModels.addAll(result['models']));
       }
     } catch (e) {
       print('error: ConfigPage -> getLlmModels => $e');
@@ -88,7 +99,7 @@ class _ConfigPageState extends State<ConfigPage> {
       final result = await fetchData("/models/Embedding", 'GET');
 
       if (result is Map && result.containsKey('models')) {
-        embdModels.addAll(result['models']);
+        setState(() => embdModels.addAll(result['models']));
       }
     } catch (e) {
       print("error: ConfigPage -> getEmbdModels => $e");
@@ -100,10 +111,34 @@ class _ConfigPageState extends State<ConfigPage> {
       final result = await fetchData('/models/Image', 'GET');
 
       if (result is Map && result.containsKey('models')) {
-        diffusionModels.addAll(result['models']);
+        setState(() => diffusionModels.addAll(result['models']));
       }
     } catch (e) {
       print("error: ConfigPage -> getDiffusionModels => $e");
+    }
+  }
+
+  Future<void> getTTSModels() async {
+    try {
+      final result = await fetchData('/tts/models', 'GET');
+
+      if (result is Map && result.containsKey('models')) {
+        setState(() => ttsModels.addAll(result['models']));
+      }
+    } catch (e) {
+      print("error: ConfigPage -> getTTSMModels => $e");
+    }
+  }
+
+  Future<void> getVoices() async {
+    try {
+      final result = await fetchData('/voices', 'GET');
+
+      if (result is Map && result.containsKey('voices')) {
+        setState(() => voices.addAll(result['voices']));
+      }
+    } catch (e) {
+      print("Error: ConfigPage -> getVoices => $e");
     }
   }
 
@@ -210,11 +245,11 @@ class _ConfigPageState extends State<ConfigPage> {
                   children: [
                     Padding(
                       padding: const EdgeInsets.all(8.0),
-                      child: Row(
-                        children: [
-                          const Text("LLM model"),
-                          const Spacer(),
-                          PopupMenuButton(
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.chat),
+                          title: const Text("LLM model"),
+                          trailing: PopupMenuButton(
                             child: Text(
                               config.llmModel != '' ? config.llmModel : "None",
                             ),
@@ -230,17 +265,17 @@ class _ConfigPageState extends State<ConfigPage> {
                                 )
                                 .toList(),
                           ),
-                        ],
+                        ),
                       ),
                     ),
 
                     Padding(
                       padding: const EdgeInsets.all(8.0),
-                      child: Row(
-                        children: [
-                          const Text("Embedding model"),
-                          const Spacer(),
-                          PopupMenuButton(
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.scatter_plot),
+                          title: const Text("Embedding model"),
+                          trailing: PopupMenuButton(
                             child: Text(
                               config.embdModel != ''
                                   ? config.embdModel
@@ -256,17 +291,17 @@ class _ConfigPageState extends State<ConfigPage> {
                                 )
                                 .toList(),
                           ),
-                        ],
+                        ),
                       ),
                     ),
 
                     Padding(
                       padding: const EdgeInsets.all(8.0),
-                      child: Row(
-                        children: [
-                          const Text("Diffusion model"),
-                          const Spacer(),
-                          PopupMenuButton(
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.gradient),
+                          title: const Text("Diffusion model"),
+                          trailing: PopupMenuButton(
                             child: Text(
                               config.diffusionModel != ''
                                   ? config.diffusionModel
@@ -283,7 +318,7 @@ class _ConfigPageState extends State<ConfigPage> {
                                 )
                                 .toList(),
                           ),
-                        ],
+                        ),
                       ),
                     ),
                   ],
@@ -405,6 +440,92 @@ class _ConfigPageState extends State<ConfigPage> {
                             onChanged: (v) {
                               config.minP = double.tryParse(v) ?? config.minP;
                             },
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // TTS configuration
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: ExpansionTile(
+                  title: const Text("TTS"),
+                  children: [
+                    Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.graphic_eq),
+                          title: const Text('TTS Model'),
+                          trailing: PopupMenuButton(
+                            child: Text(
+                              config.ttsModel != ''
+                                  ? config.ttsModel
+                                  : (ttsModels.firstOrNull ?? 'None'),
+                            ),
+                            itemBuilder: (context) => ttsModels
+                                .map(
+                                  (m) => PopupMenuItem(
+                                    child: Text(m),
+                                    onTap: () =>
+                                        setState(() => config.ttsModel = m),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.record_voice_over),
+                          title: const Text('Voice'),
+                          trailing: PopupMenuButton(
+                            child: Text(
+                              config.voice != '' ? config.voice : 'Default',
+                            ),
+                            itemBuilder: (context) => voices
+                                .map(
+                                  (v) => PopupMenuItem(
+                                    child: Text(v),
+                                    onTap: () =>
+                                        setState(() => config.voice = v),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+
+                    Padding(
+                      padding: EdgeInsets.all(8.0),
+                      child: Column(
+                        children: [
+                          const Text('Voice speed'),
+
+                          Slider(
+                            min: 0.5,
+                            max: 2.0,
+                            divisions: 15,
+                            value: config.ttsSpeed,
+                            label: "${config.ttsSpeed.toStringAsFixed(1)}x",
+                            onChanged: (value) {
+                              setState(() {
+                                config.ttsSpeed = value;
+                              });
+                            },
+                          ),
+
+                          Text(
+                            'Controls the speed of generated audio',
+                            style: Theme.of(context).textTheme.bodySmall,
                           ),
                         ],
                       ),

@@ -1,4 +1,6 @@
 import 'dart:convert';
+import 'dart:typed_data';
+import 'dart:html' as html;
 import 'package:http/http.dart' as http;
 import 'package:frontend/objects.dart';
 
@@ -82,6 +84,27 @@ Future<AttachmentRemote> getFile(String fileName) async {
     size: int.parse(response.headers['content-length']!),
     data: bytes,
   );
+}
+
+Future<Uint8List?> fetchTTSData({required int chatId, required int msgId}) async {
+  final request = http.Request('POST', Uri.parse('http://127.0.0.1:8000/tts'));
+
+  request.headers['content-type'] = 'application/json';
+
+  request.body = jsonEncode({'chat_id': chatId, 'msg_id': msgId});
+
+  try {
+    final response = await request.send();
+
+    if (response.statusCode == 200) {
+      return await response.stream.toBytes();
+    }
+
+    return null;
+  } catch (e) {
+    print('Error: fetchTTSData -> $e');
+    return null;
+  }
 }
 
 Stream<String> fetchStreamData(Map<String, dynamic> data) async* {

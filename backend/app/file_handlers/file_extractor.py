@@ -1,8 +1,11 @@
 from platform import system
 from abc import ABC, abstractmethod
-from typing import override
 from dataclasses import dataclass
 import pymupdf
+try:
+    from typing import override
+except ImportError:
+    from typing_extensions import override
 
 SYSTEM_SLASH = '\\' if system().lower() == 'windows' else '/'
 
