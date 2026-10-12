@@ -5,6 +5,7 @@ from .web_search_provider import *
 from .web_fetch_provider import *
 from .tool_provider import *
 from .tts import *
+from .stt import *
 
 def bootstrap():
     # AI Registry
@@ -25,6 +26,13 @@ def bootstrap():
 
     tts_registry.register(
         KittenttsProvider()
+    )
+
+    # STT Registry
+    stt_registry = STTRegistry()
+
+    stt_registry.register(
+        WhispercppProvider()
     )
 
     # Web Search Engine Register

@@ -62,7 +62,7 @@ def start_frontend(flutter):
             "Frontend",
             [
                 'flutter' if use_global_flutter else flutter,
-                "run", "-d", "web-server", "--release",
+                "run", "-d", "web-server",
                 "--web-hostname", "0.0.0.0", "--web-port", "8080"
             ],
             cwd=os.path.join(ROOT, 'frontend')

@@ -8,10 +8,10 @@ from platform import system
 from threading import Thread
 from fastapi import APIRouter, HTTPException, status, WebSocket, Body, UploadFile, File
 from fastapi.responses import FileResponse, Response
-from config import PATH, check_cfg_file
+from config import PATH, MODELS_PATH, check_cfg_file
 import database as db
 from agent import AgentExcutor
-from providers import LlamacppProvider, TTSRegistry, markdown_to_tts
+from providers import LlamacppProvider, TTSRegistry, STTRegistry, markdown_to_tts
 from .api_schema import MsgModelRequest, ConfigRequest, FileRequest, TTSRequest
 
 router = APIRouter()
@@ -310,6 +310,7 @@ async def get_cfg():
         'top_k': 40,
         'top_p': 0.95,
         'min_p': 0.05,
+        'stt_model': '',
         'tts_model': '',
         'voice': '',
         'tts_speed': 1.0
@@ -465,3 +466,36 @@ async def get_tts_models():
     return {
         'models': models
     }
+
+@router.post("/stt")
+async def set_transcription(
+    audio: UploadFile = File(...)
+):
+    cfg = check_cfg_file()
+    stt = STTRegistry().get('whispercpp')
+
+    audio_bytes = await audio.read()
+
+    text = stt.transcript(
+        stt_model=cfg.get('stt_model', None),
+        audio= audio_bytes
+    )
+
+    return {'text': text}
+
+@router.get("/stt/models")
+async def get_stt_models():
+    stt_model_path = os.path.join(
+        MODELS_PATH,
+        'STT',
+        'whisper.cpp' # Make dynamic search for diferent providers
+    )
+
+    if not os.path.exists(stt_model_path):
+        os.makedirs(stt_model_path, exist_ok=True)
+
+    models = []
+    for model_name in os.listdir(stt_model_path):
+        models.append(model_name)
+
+    return {'models': models}

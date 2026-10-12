@@ -25,6 +25,7 @@ class _ConfigPageState extends State<ConfigPage> {
     topK: 40,
     topP: 0.95,
     minP: 0.05,
+    sttModel: '',
     ttsModel: '',
     voice: '',
     ttsSpeed: 1.0,
@@ -34,6 +35,7 @@ class _ConfigPageState extends State<ConfigPage> {
   final List<dynamic> embdModels = [];
   final List<dynamic> diffusionModels = [];
   final List<dynamic> ttsModels = [];
+  final List<dynamic> sttModels = [];
 
   final List<dynamic> voices = [];
 
@@ -47,6 +49,7 @@ class _ConfigPageState extends State<ConfigPage> {
     getDiffusionModels();
     getTTSModels();
     getVoices();
+    getSTTModels();
   }
 
   Future<void> initConfig() async {
@@ -63,6 +66,7 @@ class _ConfigPageState extends State<ConfigPage> {
         config.topK = fetchedCfg['top_k'];
         config.topP = fetchedCfg['top_p'];
         config.minP = fetchedCfg['min_p'];
+        config.sttModel = fetchedCfg['stt_model'];
         config.ttsModel = fetchedCfg['tts_model'];
         config.voice = fetchedCfg['voice'];
         config.ttsSpeed = fetchedCfg['tts_speed'];
@@ -127,6 +131,18 @@ class _ConfigPageState extends State<ConfigPage> {
       }
     } catch (e) {
       print("error: ConfigPage -> getTTSMModels => $e");
+    }
+  }
+
+  Future<void> getSTTModels() async {
+    try {
+      final result = await fetchData('/stt/models', 'GET');
+
+      if (result is Map && result.containsKey('models')) {
+        setState(() => sttModels.addAll(result['models']));
+      }
+    } catch (e) {
+      print("error: ConfigPage -> getSTTModels => $e");
     }
   }
 
@@ -534,6 +550,38 @@ class _ConfigPageState extends State<ConfigPage> {
                 ),
               ),
 
+              // STT Configuration
+              Padding(
+                padding: const EdgeInsets.all(10),
+                child: ExpansionTile(
+                  title: const Text('STT'),
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.all(8),
+                      child: Card(
+                        child: ListTile(
+                          leading: const Icon(Icons.graphic_eq),
+                          title: const Text('STT model'),
+                          trailing: PopupMenuButton(
+                            child: Text(
+                              config.sttModel != '' ? config.sttModel : 'None',
+                            ),
+                            itemBuilder: (context) => sttModels
+                                .map(
+                                  (m) => PopupMenuItem(
+                                    child: Text(m),
+                                    onTap: () =>
+                                        setState(() => config.sttModel = m),
+                                  ),
+                                )
+                                .toList(),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
               SizedBox(height: 40),
             ],
           ),

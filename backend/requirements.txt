@@ -21,3 +21,5 @@ ddgs==9.15.0
 trafilatura==2.2.0
 
 kittentts @ https://github.com/KittenML/KittenTTS/releases/download/0.8.1/kittentts-0.8.1-py3-none-any.whl
+
+pywhispercpp==1.5.1

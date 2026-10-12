@@ -8,6 +8,7 @@ class ConfigParams {
   int topK;
   double topP;
   double minP;
+  String sttModel;
   String ttsModel;
   String voice;
   double ttsSpeed;
@@ -22,6 +23,7 @@ class ConfigParams {
     required this.topK,
     required this.topP,
     required this.minP,
+    required this.sttModel,
     required this.ttsModel,
     required this.voice,
     required this.ttsSpeed,
@@ -38,6 +40,7 @@ class ConfigParams {
       'top_k': topK,
       'top_p': topP,
       'min_p': minP,
+      'stt_model': sttModel,
       'tts_model': ttsModel,
       'voice': voice,
       'tts_speed': ttsSpeed,

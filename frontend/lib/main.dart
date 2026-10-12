@@ -14,6 +14,9 @@ void main() {
       ChangeNotifierProvider(
         create: (context) => TTSPlayer()
       ),
+      ChangeNotifierProvider(
+        create: (context) => STTRecorder(),
+      ),
     ],
     child: const MainApp()
   ));

@@ -1,6 +1,5 @@
 import 'dart:convert';
 import 'dart:typed_data';
-import 'dart:html' as html;
 import 'package:http/http.dart' as http;
 import 'package:frontend/objects.dart';
 
@@ -31,6 +30,35 @@ Future<dynamic> fetchData(
     }
   } catch (e) {
     return {'detail': 'Failed to connect to the server. Error: $e'};
+  }
+}
+
+Future<dynamic> uploadAudio(Uint8List data) async {
+  final request = http.MultipartRequest(
+    'POST',
+    Uri.parse('http://127.0.0.1:8000/stt'),
+  );
+
+  request.files.add(
+    http.MultipartFile.fromBytes(
+      'audio',
+      data,
+      filename: 'audio.pcm'
+    ),
+  );
+
+  try {
+    final response = await request.send();
+    if (response.statusCode == 200) {
+      final body = await response.stream.bytesToString();
+      return jsonDecode(body);
+    } else {
+      return {
+        'detail': "Audio upload has failed\nCode ${response.statusCode}",
+      };
+    }
+  } catch (e) {
+    return {'detail': "Failed to send audio -> $e"};
   }
 }
 
@@ -86,7 +114,10 @@ Future<AttachmentRemote> getFile(String fileName) async {
   );
 }
 
-Future<Uint8List?> fetchTTSData({required int chatId, required int msgId}) async {
+Future<Uint8List?> fetchTTSData({
+  required int chatId,
+  required int msgId,
+}) async {
   final request = http.Request('POST', Uri.parse('http://127.0.0.1:8000/tts'));
 
   request.headers['content-type'] = 'application/json';

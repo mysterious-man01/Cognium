@@ -20,7 +20,11 @@
     - [✅] Kitten
     - [ ] Piper
     - [ ] XTTSv2
-- [ ] Add speech-2-text interaction
+- [✅] Add speech-2-text interaction
+    - [✅] pywhispercpp (whisper.cpp)
+    - [ ] sherpa-onnx
+    - [ ] faster-whisper
+    - [ ] Vosk
 - [ ] Add MCP integration
 - [ ] Add other providers
     - [✅] Llama.cpp

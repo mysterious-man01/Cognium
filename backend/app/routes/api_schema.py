@@ -23,6 +23,7 @@ class ConfigRequest(BaseModel):
     top_k: int
     top_p: float
     min_p: float
+    stt_model: str
     tts_model: str
     voice: str
     tts_speed: float

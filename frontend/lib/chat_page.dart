@@ -27,6 +27,7 @@ class _ChatPageState extends State<ChatPage> {
   StreamSubscription? _socSub;
   final ScrollController _scrollController = ScrollController();
   final TextEditingController _textController = TextEditingController();
+  STTRecorder? _recorder;
   late int chatId;
   final List<Message> msgList = [];
   final List<dynamic> modelsList = [];
@@ -68,6 +69,8 @@ class _ChatPageState extends State<ChatPage> {
     _socSub?.cancel();
     _scrollController.dispose();
     _textController.dispose();
+    _recorder?.dispose();
+    _recorder = null;
 
     super.dispose();
   }
@@ -245,6 +248,7 @@ class _ChatPageState extends State<ChatPage> {
   Widget build(BuildContext context) {
     final chatCtrl = Provider.of<ChatController>(context, listen: true);
     final ttsPlayer = Provider.of<TTSPlayer>(context, listen: true);
+    _recorder ??= Provider.of<STTRecorder>(context, listen: true);
     final isGenerating = widget.chat?.isGenerating ?? false;
 
     return Column(
@@ -394,6 +398,9 @@ class _ChatPageState extends State<ChatPage> {
                   keyboardType: TextInputType.multiline,
                   textInputAction: TextInputAction.newline,
                   enableInteractiveSelection: true,
+                  onChanged: (_) {
+                    setState(() => ());
+                  },
                   minLines: 1,
                   maxLines: 10,
                   decoration: InputDecoration(labelText: "Type anything"),
@@ -434,50 +441,79 @@ class _ChatPageState extends State<ChatPage> {
                             onPressed: null,
                             enableFeedback: false,
                           )
-                        : IconButton(
-                            icon: const Icon(Icons.send),
-                            onPressed: () {
-                              if (_textController.text.isEmpty ||
-                                  chatCtrl.selectedModel.isEmpty)
-                                return;
+                        : (_textController.text.isEmpty
+                              ? (_recorder!.isRecording
+                                    ? IconButton(
+                                        icon: Icon(Icons.stop),
+                                        onPressed: () async {
+                                          _recorder!.stop();
 
-                              final msg = Message(
-                                id: null,
-                                role: 'user',
-                                content: _textController.text.trim(),
-                                attachments: attachments.toList(
-                                  growable: false,
-                                ),
-                                metrics: null,
-                                timestamp: null,
-                              );
+                                          if (_recorder!.data != null) {
+                                            final decodedText =
+                                                await uploadAudio(
+                                                  _recorder!.data!,
+                                                );
 
-                              setState(() {
-                                msgList.add(msg);
-                              });
+                                            if (decodedText is Map &&
+                                                decodedText.containsKey(
+                                                  'text',
+                                                )) {
+                                              setState(() {
+                                                _textController.text =
+                                                    decodedText['text'].trim();
+                                              });
+                                            }
+                                          }
+                                        },
+                                      )
+                                    : IconButton(
+                                        icon: const Icon(Icons.mic),
+                                        onPressed: () {
+                                          _recorder!.record();
+                                        },
+                                      ))
+                              : IconButton(
+                                  icon: const Icon(Icons.send),
+                                  onPressed: () {
+                                    if (chatCtrl.selectedModel.isEmpty) return;
 
-                              final body = {
-                                'model': chatCtrl.selectedModel,
-                                'chat_id': chatId,
-                                'content': _textController.text.trim(),
-                                'attachments': attachments.map((e) {
-                                  return {'name': e.name};
-                                }).toList(),
-                              };
+                                    final msg = Message(
+                                      id: null,
+                                      role: 'user',
+                                      content: _textController.text.trim(),
+                                      attachments: attachments.toList(
+                                        growable: false,
+                                      ),
+                                      metrics: null,
+                                      timestamp: null,
+                                    );
 
-                              if (attachments.isNotEmpty) {
-                                setState(() {
-                                  attachments.clear();
-                                });
-                              }
+                                    setState(() {
+                                      msgList.add(msg);
+                                    });
 
-                              _socket.send(chatId, body);
+                                    final body = {
+                                      'model': chatCtrl.selectedModel,
+                                      'chat_id': chatId,
+                                      'content': _textController.text.trim(),
+                                      'attachments': attachments.map((e) {
+                                        return {'name': e.name};
+                                      }).toList(),
+                                    };
 
-                              _textController.clear();
+                                    if (attachments.isNotEmpty) {
+                                      setState(() {
+                                        attachments.clear();
+                                      });
+                                    }
 
-                              chatCtrl.generating(chatId);
-                            },
-                          ),
+                                    _socket.send(chatId, body);
+
+                                    _textController.clear();
+
+                                    chatCtrl.generating(chatId);
+                                  },
+                                )),
                   ],
                 ),
               ],

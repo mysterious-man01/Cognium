@@ -23,7 +23,8 @@ A local-first AI platform
 - Agentic capabilities
 - Simple LTM (Long-Term Memory)
 - Image generation support
-- Text To Speech support
+- Text-To-Speech support
+- Speech-To-Text support (Only on localhost and in Flutter server's debug mode)
 
 ## Requirements
 - Docker
