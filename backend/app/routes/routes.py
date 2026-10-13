@@ -8,11 +8,14 @@ from platform import system
 from threading import Thread
 from fastapi import APIRouter, HTTPException, status, WebSocket, Body, UploadFile, File
 from fastapi.responses import FileResponse, Response
-from config import PATH, MODELS_PATH, check_cfg_file
+from fastapi.staticfiles import StaticFiles
+from config import ROOT, PATH, MODELS_PATH, check_cfg_file
 import database as db
 from agent import AgentExcutor
 from providers import LlamacppProvider, TTSRegistry, STTRegistry, markdown_to_tts
 from .api_schema import MsgModelRequest, ConfigRequest, FileRequest, TTSRequest
+
+# WEB_DIR = os.path.join(ROOT, 'frontend', 'web')
 
 router = APIRouter()
 
@@ -499,3 +502,31 @@ async def get_stt_models():
         models.append(model_name)
 
     return {'models': models}
+
+# router.mount(
+#     "/",
+#     StaticFiles(directory=WEB_DIR, html=True),
+#     name="frontend",
+# )
+
+# router.mount(
+#     "/assets",
+#     StaticFiles(directory=os.path.join(WEB_DIR, 'assets')),
+#     name="assets"
+# )
+
+# router.mount(
+#     "/canvaskit",
+#     StaticFiles(directory=os.path.join(WEB_DIR, 'canvaskit')),
+#     name="canvaskit"
+# )
+
+# router.mount(
+#     "/icons",
+#     StaticFiles(directory=os.path.join(WEB_DIR, 'icons')),
+#     name="icons"
+# )
+
+# @router.get("/")
+# async def index():
+#     return FileResponse("frontend/web/index.html")

@@ -1,8 +1,13 @@
+from os.path import join
 from contextlib import asynccontextmanager
 from fastapi import FastAPI
+from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
 from database import get_engine
 from routes import router
+from config import ROOT
+
+WEB_DIR = join(ROOT, 'frontend', 'web')
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -26,3 +31,10 @@ app.add_middleware(
 )
 
 app.include_router(router)
+
+# Serve static files from frontend
+app.mount(
+    "/",
+    StaticFiles(directory=WEB_DIR, html=True),
+    name="frontend",
+)

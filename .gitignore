@@ -2,6 +2,7 @@
 .flutter/
 __pycache__/
 DATA/
+frontend/
 
 .src
 .env

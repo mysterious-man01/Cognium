@@ -44,7 +44,8 @@ def start_backend(py_exe):
     except Exception as err:
         raise SystemExit(error(f"Could not create backend instance: {err}"))
 
-def start_frontend(flutter):
+# Deprecated
+def start_frontend_flutter(flutter):
     print(message("Initializing frontend..."))
     local_flutter = os.path.exists(flutter)
     global_flutter = shutil.which('flutter')
@@ -66,6 +67,22 @@ def start_frontend(flutter):
                 "--web-hostname", "0.0.0.0", "--web-port", "8080"
             ],
             cwd=os.path.join(ROOT, 'frontend')
+        )
+
+        return frontend
+    except Exception as err:
+        raise SystemExit(error(f"Could not create frontend instance: {err}"))
+
+def start_frontend():
+    print(message("Initializing frontent..."))
+    try:
+        frontend = spawn(
+            "frontend",
+            [
+                'docker', 'compose', '-f',
+                'docker-compose.frontend.yml', 'up'
+            ],
+            cwd=os.path.join(ROOT, 'deployment')
         )
 
         return frontend
@@ -98,7 +115,6 @@ def wait_port(host, port, process, timeout=30):
 
     while time.time() - start < timeout:
 
-        # processo terminou
         if process.poll() is not None:
             raise RuntimeError(
                 error(f"Process terminated with code {process.returncode}")
@@ -156,7 +172,8 @@ def main():
 
     wait_port('127.0.0.1', 8000, backend)
 
-    frontend = start_frontend(local_flutter)
+    # frontend = start_frontend(local_flutter)
+    # frontend = start_frontend()
 
     print(success("All done"))
 
@@ -165,7 +182,7 @@ def main():
             database.wait()
 
         backend.wait()
-        frontend.wait()
+        # frontend.wait()
 
     except KeyboardInterrupt:
         print('Keyboard unterruption')
