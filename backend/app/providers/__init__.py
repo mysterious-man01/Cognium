@@ -1,3 +1,5 @@
+import asyncio
+
 from .ai_provider import *
 from .llamacpp.llamacpp_provider import LlamacppProvider, LlamacppEmbedProvider
 from.image_gen import SDCppProvider
@@ -6,8 +8,9 @@ from .web_fetch_provider import *
 from .tool_provider import *
 from .tts import *
 from .stt import *
+from .mcp_provider import *
 
-def bootstrap():
+async def bootstrap():
     # AI Registry
     ai_registry = AIRegistry()
 
@@ -68,4 +71,7 @@ def bootstrap():
         ImageGenTool()
     )
 
-bootstrap()
+    # MCP Client Register
+    await MCPClientRegistry().warmup()
+
+asyncio.run(bootstrap())

@@ -3,7 +3,9 @@ import traceback
 from enum import Enum
 from dataclasses import dataclass, field
 from typing import Any
-from providers import AIRegistry, AIProvider, ToolRegistry
+import asyncio
+
+from providers import AIRegistry, AIProvider, ToolRegistry, MCPClientRegistry
 from .memory_module import AgentMemory
 
 MAX_REPETITIONS = 8
@@ -21,7 +23,7 @@ class AgentResponse:
 
 class DecissorResponse:
     _tool_name = ''
-    _parameters = ''
+    _parameters = {}
 
     def __init__(self, content: str):
         try:
@@ -68,6 +70,7 @@ class AgentExcutor:
     provider = AIRegistry().get('llamacpp')
     tools = ToolRegistry()
     memory = AgentMemory(provider)
+    mcp_registry = MCPClientRegistry()
 
     def decide(self, model_name, **cfg):
         ctx = [{
@@ -94,6 +97,9 @@ class AgentExcutor:
         ctx.extend(self.state.messages[1:])
 
         tool_list = [tool[1].get_use_schema for tool in self.tools.tools]
+
+        for mcp in self.mcp_registry.providers:
+            tool_list.extend(mcp.get_use_schema)
 
         tool_list.append({
             "type": "function",
@@ -150,6 +156,10 @@ class AgentExcutor:
         return provider.generate(**cfg)
 
     def exec_tool(self, tool_name, **params):
+        for mcp in self.mcp_registry.providers:
+            if mcp.server_name in tool_name:
+                return asyncio.run(mcp.call_tool(tool_name, params))
+
         tool = ToolRegistry().get(tool_name)
         if isinstance(tool, str):
             return None

@@ -28,6 +28,9 @@ class ConfigRequest(BaseModel):
     voice: str
     tts_speed: float
 
+class MCPConfigRequest(BaseModel):
+    server_def: dict[str, dict]
+
 class FileRequest(BaseModel):
     id: int
     name: str

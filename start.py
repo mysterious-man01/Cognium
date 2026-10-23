@@ -1,7 +1,6 @@
 import os
 import time
 import socket
-import shutil
 import signal
 import threading
 import platform as pl
@@ -43,51 +42,6 @@ def start_backend(py_exe):
         return backend
     except Exception as err:
         raise SystemExit(error(f"Could not create backend instance: {err}"))
-
-# Deprecated
-def start_frontend_flutter(flutter):
-    print(message("Initializing frontend..."))
-    local_flutter = os.path.exists(flutter)
-    global_flutter = shutil.which('flutter')
-    use_global_flutter = False
-
-    if local_flutter:
-        use_global_flutter = False
-    elif global_flutter:
-        use_global_flutter = True
-    else:
-        raise SystemExit(error('Flutter not found'))
-
-    try:
-        frontend = spawn(
-            "Frontend",
-            [
-                'flutter' if use_global_flutter else flutter,
-                "run", "-d", "web-server",
-                "--web-hostname", "0.0.0.0", "--web-port", "8080"
-            ],
-            cwd=os.path.join(ROOT, 'frontend')
-        )
-
-        return frontend
-    except Exception as err:
-        raise SystemExit(error(f"Could not create frontend instance: {err}"))
-
-def start_frontend():
-    print(message("Initializing frontent..."))
-    try:
-        frontend = spawn(
-            "frontend",
-            [
-                'docker', 'compose', '-f',
-                'docker-compose.frontend.yml', 'up'
-            ],
-            cwd=os.path.join(ROOT, 'deployment')
-        )
-
-        return frontend
-    except Exception as err:
-        raise SystemExit(error(f"Could not create frontend instance: {err}"))
 
 def spawn(name, args, cwd):
     process = subprocess.Popen(
@@ -135,7 +89,6 @@ def main():
 
     database = None
     backend = None
-    frontend = None
 
     if os.getcwd() != ROOT:
         os.chdir(ROOT)
@@ -146,21 +99,13 @@ def main():
         'Scripts' if PLATFORM == 'windows' else 'bin',
         'python.exe' if PLATFORM == 'windows' else 'python'
     )
-    local_flutter = os.path.join(
-        ROOT,
-        '.flutter',
-        'flutter',
-        'bin',
-        'flutter.bat' if PLATFORM == 'windows' else 'flutter'
-    )
 
     if not os.path.exists(python_venv):
         install()
 
-    if (
-        not os.path.exists(local_flutter)
-        and shutil.which("flutter") is None
-    ):
+    index_path = os.path.join(ROOT, 'frontend', 'index.html')
+
+    if not os.path.exists(index_path):
         install()
 
     if os.getenv('DB_PERSISTANT', default='false').strip().lower() in ('1', 'y', 'yes', 'true'):
@@ -172,9 +117,6 @@ def main():
 
     wait_port('127.0.0.1', 8000, backend)
 
-    # frontend = start_frontend(local_flutter)
-    # frontend = start_frontend()
-
     print(success("All done"))
 
     try:
@@ -182,24 +124,17 @@ def main():
             database.wait()
 
         backend.wait()
-        # frontend.wait()
 
     except KeyboardInterrupt:
         print('Keyboard unterruption')
 
         if PLATFORM == 'windows':
-            if frontend:
-                frontend.send_signal(signal.CTRL_BREAK_EVENT)
-
             if backend:
                 backend.send_signal(signal.CTRL_BREAK_EVENT)
 
             if database:
                 database.send_signal(signal.CTRL_BREAK_EVENT)
         else:
-            if frontend:
-                frontend.send_signal(signal.SIGINT)
-
             if backend:
                 backend.send_signal(signal.SIGINT)
 

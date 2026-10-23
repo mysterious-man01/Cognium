@@ -25,7 +25,7 @@
     - [ ] sherpa-onnx
     - [ ] faster-whisper
     - [ ] Vosk
-- [ ] Add MCP integration
+- [✅] Add MCP integration
 - [ ] Add other providers
     - [✅] Llama.cpp
     - [ ] ONNX

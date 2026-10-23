@@ -20,11 +20,13 @@ A local-first AI platform
     - RAG
     - Web search
     - Web fetch
+    - MCP tools [EXPERIMENTAL]
 - Agentic capabilities
 - Simple LTM (Long-Term Memory)
 - Image generation support
 - Text-To-Speech support
 - Speech-To-Text support (Only on localhost and in Flutter server's debug mode)
+- MCP protocol support (only stdio) [EXPERIMENTAL]
 
 ## Requirements
 - Docker

@@ -6,16 +6,15 @@ import asyncio
 import traceback
 from platform import system
 from threading import Thread
+
 from fastapi import APIRouter, HTTPException, status, WebSocket, Body, UploadFile, File
 from fastapi.responses import FileResponse, Response
-from fastapi.staticfiles import StaticFiles
-from config import ROOT, PATH, MODELS_PATH, check_cfg_file
+
+from config import PATH, MODELS_PATH, check_cfg_file
 import database as db
 from agent import AgentExcutor
-from providers import LlamacppProvider, TTSRegistry, STTRegistry, markdown_to_tts
-from .api_schema import MsgModelRequest, ConfigRequest, FileRequest, TTSRequest
-
-# WEB_DIR = os.path.join(ROOT, 'frontend', 'web')
+from providers import LlamacppProvider, TTSRegistry, MCPClientRegistry, STTRegistry, markdown_to_tts
+from .api_schema import MsgModelRequest, ConfigRequest, MCPConfigRequest, TTSRequest
 
 router = APIRouter()
 
@@ -30,7 +29,7 @@ async def websocket(ws: WebSocket):
     queue = asyncio.Queue()
     loop = asyncio.get_running_loop()
 
-    def producer(context, model_name):
+    def producer(context):
         try:
             cfg = check_cfg_file()
 
@@ -100,7 +99,7 @@ async def websocket(ws: WebSocket):
 
             Thread(
                 target=producer,
-                args=(context, request['model'],)
+                args=(context,)
             ).start()
 
             msg = db.add_message(
@@ -358,6 +357,116 @@ async def update_cfg(new_cfg: ConfigRequest):
 
     return {"detail": "Config updated"}
 
+@router.get("/mcp")
+async def get_mcp_cfg():
+    config_path = os.path.join(
+        PATH[0] if PATH[0] else PATH[1],
+        'Config',
+        'mcp_config.json'
+    )
+
+    if not os.path.exists(config_path):
+        return {}
+
+    with open(config_path, 'r', encoding='UTF-8') as mcp_file:
+        try:
+            return json.loads(mcp_file.read().strip())
+        except json.JSONDecodeError:
+            return json.loads('{"mcpServers": []}')
+
+@router.put("/mcp")
+async def set_mcp_cfg(new_cfg: MCPConfigRequest):
+    config_path = os.path.join(
+        PATH[0] if PATH[0] else PATH[1],
+        'Config',
+        'mcp_config.json'
+    )
+
+    if not os.path.exists(config_path):
+        os.makedirs(config_path, exist_ok=True)
+        with open(config_path, 'w', encoding='UTF-8') as file:
+            json.dump({"mcpServers": []}, file)
+
+    with open(config_path, 'r+', encoding='UTF-8') as file:
+        try:
+            current_cfg = json.loads(file.read().strip())
+            file.seek(0)
+            file.truncate(0)
+        except json.JSONDecodeError:
+            current_cfg = {}
+
+        if current_cfg.get('mcpServers') and isinstance(current_cfg['mcpServers'], list):
+            new_server_name = next(iter(new_cfg.server_def))
+            servers = current_cfg['mcpServers']
+
+            updated = False
+            for index, cur_server in enumerate(servers):
+                if next(iter(cur_server)) == new_server_name:
+                    servers[index] = new_cfg.server_def
+                    updated = True
+
+            if not updated:
+                servers.append(new_cfg.server_def)
+
+            current_cfg['mcpServers'] = servers
+
+            json.dump(current_cfg, file)
+        else:
+            json.dump({"mcpServers": [new_cfg.server_def]}, file)
+
+    await MCPClientRegistry().warmup()
+
+    return {'detail': "MCP config file updated"}
+
+@router.delete("/mcp")
+async def delete_mcp_server(server_name: str = Body(..., embed=True)):
+    config_path = os.path.join(
+        PATH[0] if PATH[0] else PATH[1],
+        'Config',
+        'mcp_config.json'
+    )
+
+    if not os.path.exists(config_path):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="MCP file not found"
+        )
+
+    del_element = None
+
+    with open(config_path, 'r+', encoding="UTF-8") as file:
+        try:
+            mcp_cfg = json.loads(file.read().strip())
+            file.seek(0)
+            file.truncate(0)
+        except json.JSONDecodeError as err:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="MCP server definition file not found"
+            ) from err
+
+        if mcp_cfg.get('mcpServers') and isinstance(mcp_cfg['mcpServers'], list):
+            servers = mcp_cfg['mcpServers']
+
+            for index, element in enumerate(servers):
+                if server_name == next(iter(element)):
+                    del_element = servers.pop(index)
+                    break
+
+            mcp_cfg['mcpServers'] = servers
+
+        if del_element is None:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Element {server_name} does not exist"
+            )
+
+        json.dump(mcp_cfg, file)
+
+    await MCPClientRegistry().warmup()
+
+    return {'detail': f"MCP server {next(iter(del_element))} deleted"}
+
 @router.post("/chat", status_code=status.HTTP_201_CREATED)
 async def create_chat():
     result = db.add_chat()
@@ -502,31 +611,3 @@ async def get_stt_models():
         models.append(model_name)
 
     return {'models': models}
-
-# router.mount(
-#     "/",
-#     StaticFiles(directory=WEB_DIR, html=True),
-#     name="frontend",
-# )
-
-# router.mount(
-#     "/assets",
-#     StaticFiles(directory=os.path.join(WEB_DIR, 'assets')),
-#     name="assets"
-# )
-
-# router.mount(
-#     "/canvaskit",
-#     StaticFiles(directory=os.path.join(WEB_DIR, 'canvaskit')),
-#     name="canvaskit"
-# )
-
-# router.mount(
-#     "/icons",
-#     StaticFiles(directory=os.path.join(WEB_DIR, 'icons')),
-#     name="icons"
-# )
-
-# @router.get("/")
-# async def index():
-#     return FileResponse("frontend/web/index.html")

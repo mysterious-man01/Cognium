@@ -79,6 +79,7 @@ def create_envfile():
     else:
         print(success(".env file detected"))
 
+# DEPRECATED
 # Handles Flutter SDK installation
 def install_flutter():
     flutter_link = 'https://storage.googleapis.com/flutter_infra_release/releases/'
@@ -187,7 +188,7 @@ def install_backend_dep():
         'Scripts' if PLATFORM == 'windows' else 'bin',
         'python.exe' if PLATFORM == 'windows' else 'python'
     )
-    
+
     if os.path.exists(python_exe):
         try:
             print(message("Installing backend dependencies..."))
@@ -207,6 +208,7 @@ def install_backend_dep():
     else:
         raise SystemExit(error("Python virtual environment not created"))
 
+# DEPRECATED
 # Handles Flutter installation
 def handle_flutter():
     if not os.path.exists('.flutter/flutter/bin') and shutil.which('flutter') is None:
@@ -240,6 +242,7 @@ def handle_flutter():
             else:
                 print(warning("Using global Flutter environment"))
 
+# DEPRECATED
 # handles frontend dependencies
 def install_frontend_dep():
     flutter_exe = os.path.join(
